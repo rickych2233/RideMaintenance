@@ -5,6 +5,7 @@ const fs = require('fs');
 // Load environment variables from .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
+console.log('🔍 [Diagnostics] DATABASE_URL raw value:', JSON.stringify(process.env.DATABASE_URL));
 if (process.env.DATABASE_URL) {
   console.log(`🔍 [Diagnostics] DATABASE_URL found! Type: ${typeof process.env.DATABASE_URL}, Length: ${process.env.DATABASE_URL.length}, Starts with: ${process.env.DATABASE_URL.substring(0, 15)}...`);
 } else {
