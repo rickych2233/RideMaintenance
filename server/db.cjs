@@ -2,6 +2,8 @@ const pg = require('pg');
 const path = require('path');
 const fs = require('fs');
 
+console.log('🔍 [Diagnostics] DATABASE_URL BEFORE DOTENV:', JSON.stringify(process.env.DATABASE_URL));
+
 // Load environment variables from .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
