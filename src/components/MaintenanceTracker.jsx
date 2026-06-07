@@ -69,13 +69,14 @@ export default function MaintenanceTracker({
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '24px' }}>Maintenance Tracker</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Monitor vehicle service lifespans and track expense costs.</p>
+          <h2 style={{ fontSize: '22px' }}>Maintenance Tracker</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Monitor vehicle service lifespans and track expense costs.</p>
         </div>
-        <button 
-          className="btn btn-primary" 
+        <button
+          className="btn btn-primary"
+          style={{ fontSize: '13px', padding: '10px 14px' }}
           onClick={() => {
             if (vehicles.length === 0) {
               alert('Please register a vehicle in the Garage first.');
@@ -86,7 +87,7 @@ export default function MaintenanceTracker({
           }}
           disabled={vehicles.length === 0}
         >
-          🔧 Log Service Maintenance
+          🔧 Log Service
         </button>
       </div>
 
@@ -158,7 +159,7 @@ export default function MaintenanceTracker({
                       border: `1px solid ${oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
                       borderRadius: 'var(--radius-sm)'
                     }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
                           🛢️ Oil Change {oil.status === 'overdue' ? 'OVERDUE' : 'Due Soon'}
                         </span>
@@ -196,14 +197,16 @@ export default function MaintenanceTracker({
         {maintenanceLogs.length > 0 ? (
           <div className="logs-list">
             {maintenanceLogs.map((log, index) => (
-              <div 
-                key={log.id} 
-                style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'center', 
-                  padding: '16px 0',
-                  borderBottom: index < maintenanceLogs.length - 1 ? '1px solid var(--border-color)' : 'none'
+              <div
+                key={log.id}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '14px 0',
+                  gap: '12px',
+                  borderBottom: index < maintenanceLogs.length - 1 ? '1px solid var(--border-color)' : 'none',
+                  flexWrap: 'wrap'
                 }}
               >
                 <div>

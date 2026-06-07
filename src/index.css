@@ -801,6 +801,8 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   align-items: center;
   padding: 16px 20px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .log-item-left {
@@ -941,6 +943,9 @@ h1, h2, h3, h4, h5, h6 {
   .anomaly-alert-card {
     grid-column: span 1;
   }
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
@@ -952,18 +957,78 @@ h1, h2, h3, h4, h5, h6 {
   }
   .stats-row {
     grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
   }
   .main-content {
     padding-top: 10px;
     padding-bottom: 90px;
   }
+  .vehicle-selector-bar {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+  }
+  .vehicle-selector-bar > div:last-child {
+    width: 100%;
+  }
+  .vehicle-selector-bar select {
+    width: 100% !important;
+    flex: 1;
+  }
+  .glass-panel {
+    padding: 16px;
+  }
+  .stat-card {
+    gap: 10px;
+  }
+  .stat-value {
+    font-size: 18px;
+  }
+  .stat-label {
+    font-size: 11px;
+  }
+  .stat-icon {
+    width: 40px;
+    height: 40px;
+  }
+  .stat-icon svg {
+    width: 20px;
+    height: 20px;
+  }
+  .vehicle-grid {
+    grid-template-columns: 1fr;
+  }
+  .maintenance-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
 }
 
 @media (max-width: 480px) {
+  .app-container {
+    padding: 0 12px;
+  }
   .stats-row {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .stat-card .glass-panel,
+  .glass-panel.stat-card {
+    padding: 12px;
+  }
+  .stat-value {
+    font-size: 16px;
   }
   .form-row {
     grid-template-columns: 1fr;
+  }
+  .bottom-nav-item {
+    width: 48px;
+    font-size: 10px;
+  }
+  .bottom-nav-item svg {
+    width: 20px;
+    height: 20px;
   }
 }

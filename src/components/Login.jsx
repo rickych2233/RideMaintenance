@@ -65,13 +65,13 @@ export default function Login({ API_URL, onLogin }) {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      padding: '20px',
+      padding: '16px',
       background: 'var(--bg-dark)'
     }}>
       <div className="glass-panel" style={{
         width: '100%',
         maxWidth: '420px',
-        padding: '40px 32px',
+        padding: '32px 20px',
         textAlign: 'center'
       }}>
         {/* Logo */}

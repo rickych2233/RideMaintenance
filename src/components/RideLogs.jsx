@@ -9,14 +9,14 @@ export default function RideLogs({ logs, onClearLogs }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ fontSize: '24px' }}>Trip History Logs</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Analyze your driving logs and safety checklist compliance.</p>
+          <h2 style={{ fontSize: '22px' }}>Trip History Logs</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Analyze your driving logs and safety checklist compliance.</p>
         </div>
         {logs.length > 0 && (
-          <button className="btn btn-secondary" style={{ borderColor: 'var(--red)', color: 'var(--red)' }} onClick={handleClear}>
-            ⚠️ Clear All Logs
+          <button className="btn btn-secondary" style={{ borderColor: 'var(--red)', color: 'var(--red)', fontSize: '13px', padding: '10px 14px' }} onClick={handleClear}>
+            ⚠️ Clear All
           </button>
         )}
       </div>
@@ -29,13 +29,15 @@ export default function RideLogs({ logs, onClearLogs }) {
               const hasAlerts = log.safetyAlerts && log.safetyAlerts !== 'None';
               
               return (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="log-item"
-                  style={{ 
+                  style={{
                     borderBottom: index < logs.length - 1 ? '1px solid var(--border-color)' : 'none',
                     paddingBottom: index < logs.length - 1 ? '16px' : '0',
-                    paddingTop: index > 0 ? '16px' : '0'
+                    paddingTop: index > 0 ? '16px' : '0',
+                    flexWrap: 'wrap',
+                    gap: '10px'
                   }}
                 >
                   <div className="log-item-left">
@@ -44,12 +46,12 @@ export default function RideLogs({ logs, onClearLogs }) {
                     </span>
                     <div className="log-item-details">
                       <h4 className="log-item-title">{log.vehicleName}</h4>
-                      <p className="log-item-sub">
+                      <p className="log-item-sub" style={{ wordBreak: 'break-word' }}>
                         <span>📅 {log.date}</span>
-                        <span style={{ margin: '0 8px' }}>•</span>
-                        <span>⏱ {log.duration} mins</span>
-                        <span style={{ margin: '0 8px' }}>•</span>
-                        <span>Odo: {log.startOdometer} → {log.endOdometer} km</span>
+                        <span style={{ margin: '0 6px' }}>•</span>
+                        <span>⏱ {log.duration} min</span>
+                        <span style={{ margin: '0 6px' }}>•</span>
+                        <span>{log.startOdometer}→{log.endOdometer} km</span>
                       </p>
                       {log.notes && (
                         <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px', fontStyle: 'italic' }}>

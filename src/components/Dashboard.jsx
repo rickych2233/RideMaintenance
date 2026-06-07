@@ -163,45 +163,45 @@ export default function Dashboard({
                   ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))'
                   : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04))',
                 borderRadius: 'var(--radius-md)',
-                padding: '16px 20px',
+                padding: '14px 16px',
                 marginBottom: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                gap: '16px',
+                gap: '12px',
+                flexWrap: 'wrap',
                 animation: o.status === 'overdue' ? 'pulseRedBorder 2s ease-in-out infinite' : 'none'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 auto', minWidth: 0 }}>
                 <div style={{
-                  width: '48px',
-                  height: '48px',
+                  width: '40px',
+                  height: '40px',
                   borderRadius: '50%',
                   background: o.status === 'overdue' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: '22px',
+                  fontSize: '20px',
                   flexShrink: 0
                 }}>
                   🛢️
                 </div>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: '15px', color: o.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
-                    {o.status === 'overdue' ? 'OVERDUE — Oil Change Required!' : 'Oil Change Due Soon'}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 700, fontSize: '14px', color: o.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
+                    {o.status === 'overdue' ? 'OVERDUE — Oil Change!' : 'Oil Change Due Soon'}
                   </div>
-                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
                     {o.vehicleName} • {o.status === 'overdue'
                       ? `Overdue by ${Math.abs(o.remainingKm)} km`
                       : `${o.remainingKm} km remaining`
                     }
-                    {o.lastOilChangeDate && ` • Last changed: ${o.lastOilChangeDate}`}
                   </div>
                 </div>
               </div>
               <button
                 className="btn btn-primary"
-                style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}
+                style={{ padding: '8px 14px', fontSize: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}
                 onClick={() => setView('maintenance')}
               >
                 Log Oil Change
