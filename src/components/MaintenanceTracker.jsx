@@ -1,12 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function MaintenanceTracker({ 
-  vehicles, 
-  maintenanceLogs, 
-  onAddMaintenanceLog, 
-  onResetVehicleServiceOdo 
+export default function MaintenanceTracker({
+  vehicles,
+  maintenanceLogs,
+  onAddMaintenanceLog,
+  onResetVehicleServiceOdo,
+  API_URL,
+  token
 }) {
   const [showLogModal, setShowLogModal] = useState(false);
+  const [oilStatus, setOilStatus] = useState([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/maintenance/oil-status`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setOilStatus(data))
+      .catch(() => {});
+  }, [vehicles, maintenanceLogs, token]);
 
   // Form State
   const [vehicleId, setVehicleId] = useState(vehicles[0]?.id || '');
@@ -129,6 +142,42 @@ export default function MaintenanceTracker({
                 <div style={{ textAlign: 'right', fontSize: '12px', marginTop: '6px', color: kmRemaining <= 300 ? 'var(--red)' : 'var(--text-muted)' }}>
                   {kmRemaining > 0 ? `${kmRemaining} km remaining` : `${Math.abs(kmRemaining)} km overdue!`}
                 </div>
+
+                {/* Oil Change Reminder */}
+                {(() => {
+                  const oil = oilStatus.find(o => o.vehicleId === v.id);
+                  if (!oil || oil.status === 'ok') return null;
+                  const oilPercent = Math.min(100, Math.max(0, (oil.kmSince / oil.interval) * 100));
+                  return (
+                    <div style={{
+                      marginTop: '12px',
+                      padding: '10px 12px',
+                      background: oil.status === 'overdue'
+                        ? 'rgba(239, 68, 68, 0.08)'
+                        : 'rgba(245, 158, 11, 0.08)',
+                      border: `1px solid ${oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                      borderRadius: 'var(--radius-sm)'
+                    }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
+                          🛢️ Oil Change {oil.status === 'overdue' ? 'OVERDUE' : 'Due Soon'}
+                        </span>
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {oil.lastOilChangeDate ? `Last: ${oil.lastOilChangeDate}` : 'No oil change logged'}
+                        </span>
+                      </div>
+                      <div className="maintenance-progress-bar">
+                        <div
+                          className={`maintenance-progress-fill ${oil.status === 'overdue' ? 'danger' : 'warn'}`}
+                          style={{ width: `${oilPercent}%` }}
+                        />
+                      </div>
+                      <div style={{ textAlign: 'right', fontSize: '11px', marginTop: '4px', color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
+                        {oil.remainingKm > 0 ? `${oil.remainingKm} km to next oil change` : `Overdue by ${Math.abs(oil.remainingKm)} km!`}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

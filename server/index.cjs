@@ -282,6 +282,53 @@ app.post('/api/maintenance', async (req, res) => {
   }
 });
 
+// ─── OIL CHANGE STATUS ──────────────────────────────────────────────────
+
+app.get('/api/maintenance/oil-status', async (req, res) => {
+  try {
+    const vehicles = await dbQuery.all('SELECT * FROM vehicles WHERE userId = ? ORDER BY id ASC', [req.user.userId]);
+    const allLogs = await dbQuery.all(
+      "SELECT * FROM maintenance_logs WHERE userId = ? AND serviceType = 'Oil Change' ORDER BY id DESC",
+      [req.user.userId]
+    );
+
+    const oilStatus = vehicles.map(v => {
+      const lastOilChange = allLogs.find(l => l.vehicleId === v.id);
+      const lastOdo = lastOilChange ? lastOilChange.odometer : 0;
+      const lastDate = lastOilChange ? lastOilChange.date : null;
+      const interval = v.serviceInterval || 3000;
+      const kmSince = v.currentOdometer - lastOdo;
+      const remaining = interval - kmSince;
+
+      let status = 'ok';
+      if (!lastOilChange) {
+        status = v.currentOdometer > 0 ? 'overdue' : 'ok';
+      } else if (remaining <= 0) {
+        status = 'overdue';
+      } else if (remaining <= Math.round(interval * 0.2)) {
+        status = 'due_soon';
+      }
+
+      return {
+        vehicleId: v.id,
+        vehicleName: v.name,
+        vehicleType: v.type,
+        currentOdometer: v.currentOdometer,
+        lastOilChangeOdometer: lastOdo,
+        lastOilChangeDate: lastDate,
+        kmSince,
+        interval,
+        remainingKm: Math.max(0, remaining),
+        status
+      };
+    });
+
+    res.json(oilStatus);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // START SERVER
 if (require.main === module) {
   app.listen(PORT, () => {

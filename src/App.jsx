@@ -393,6 +393,8 @@ export default function App() {
             setActiveVehicleId={setActiveVehicleId}
             setView={setView}
             onStartRideCheck={handleStartRideCheck}
+            API_URL={API_URL}
+            token={token}
           />
         )}
         {view === 'checklist' && (
@@ -430,6 +432,8 @@ export default function App() {
             maintenanceLogs={maintenanceLogs}
             onAddMaintenanceLog={handleAddMaintenanceLog}
             onResetVehicleServiceOdo={handleResetVehicleServiceOdo}
+            API_URL={API_URL}
+            token={token}
           />
         )}
       </main>

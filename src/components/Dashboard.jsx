@@ -1,13 +1,27 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
-export default function Dashboard({ 
-  vehicles, 
-  logs, 
-  activeVehicleId, 
-  setActiveVehicleId, 
-  setView, 
-  onStartRideCheck 
+export default function Dashboard({
+  vehicles,
+  logs,
+  activeVehicleId,
+  setActiveVehicleId,
+  setView,
+  onStartRideCheck,
+  API_URL,
+  token
 }) {
+
+  const [oilStatus, setOilStatus] = useState([]);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch(`${API_URL}/api/maintenance/oil-status`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setOilStatus(data))
+      .catch(() => {});
+  }, [vehicles, logs, token]);
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
 
   // Calculate statistics
@@ -136,6 +150,66 @@ export default function Dashboard({
           </div>
         </div>
       </div>
+
+      {/* Oil Change Alarm */}
+      {oilStatus.filter(o => o.status !== 'ok').length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          {oilStatus.filter(o => o.status !== 'ok').map(o => (
+            <div
+              key={o.vehicleId}
+              style={{
+                border: `1px solid ${o.status === 'overdue' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(245, 158, 11, 0.5)'}`,
+                background: o.status === 'overdue'
+                  ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))'
+                  : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04))',
+                borderRadius: 'var(--radius-md)',
+                padding: '16px 20px',
+                marginBottom: '12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '16px',
+                animation: o.status === 'overdue' ? 'pulseRedBorder 2s ease-in-out infinite' : 'none'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '50%',
+                  background: o.status === 'overdue' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '22px',
+                  flexShrink: 0
+                }}>
+                  🛢️
+                </div>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: '15px', color: o.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
+                    {o.status === 'overdue' ? 'OVERDUE — Oil Change Required!' : 'Oil Change Due Soon'}
+                  </div>
+                  <div style={{ fontSize: '13px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    {o.vehicleName} • {o.status === 'overdue'
+                      ? `Overdue by ${Math.abs(o.remainingKm)} km`
+                      : `${o.remainingKm} km remaining`
+                    }
+                    {o.lastOilChangeDate && ` • Last changed: ${o.lastOilChangeDate}`}
+                  </div>
+                </div>
+              </div>
+              <button
+                className="btn btn-primary"
+                style={{ padding: '8px 16px', fontSize: '13px', whiteSpace: 'nowrap', flexShrink: 0 }}
+                onClick={() => setView('maintenance')}
+              >
+                Log Oil Change
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Main Dashboard Layout */}
       <div className="dashboard-grid">
