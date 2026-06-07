@@ -58,10 +58,17 @@ export default function VehicleManager({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h2 style={{ fontSize: '24px' }}>Vehicle Garage</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>Add and manage your fleet of vehicles.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '14px' }}>
+            Add and manage your fleet of vehicles. ({vehicles.length}/3 slots used)
+          </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-          ➕ Add New Vehicle
+        <button
+          className="btn btn-primary"
+          onClick={() => setShowAddModal(true)}
+          disabled={vehicles.length >= 3}
+          style={vehicles.length >= 3 ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+        >
+          {vehicles.length >= 3 ? 'Garage Full (3/3)' : '+ Add New Vehicle'}
         </button>
       </div>
 
@@ -153,7 +160,7 @@ export default function VehicleManager({
         {vehicles.length === 0 && (
           <div style={{ gridColumn: 'span 3', textAlign: 'center', padding: '48px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-lg)' }}>
             <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>No vehicles registered in your garage yet.</p>
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+            <button className="btn btn-primary" onClick={() => setShowAddModal(true)} disabled={false}>
               Register Your First Vehicle
             </button>
           </div>

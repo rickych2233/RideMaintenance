@@ -5,19 +5,25 @@ import ActiveRide from './components/ActiveRide';
 import VehicleManager from './components/VehicleManager';
 import RideLogs from './components/RideLogs';
 import MaintenanceTracker from './components/MaintenanceTracker';
+import Login from './components/Login';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 export default function App() {
   // Navigation State
-  const [view, setView] = useState('dashboard'); // dashboard | checklist | active_ride | vehicles | logs | maintenance
-  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState('dashboard');
+  const [loading, setLoading] = useState(false);
+
+  // Auth State
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
 
   // States synchronized with Backend Database
   const [vehicles, setVehicles] = useState([]);
   const [logs, setLogs] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
-  
+
   // Client-side UI Preferences
   const [activeVehicleId, setActiveVehicleId] = useState(() => {
     const saved = localStorage.getItem('ridecheck_active_vehicle_id');
@@ -27,18 +33,55 @@ export default function App() {
   // Active Trip checklist transfer state
   const [currentSafetyCheck, setCurrentSafetyCheck] = useState(null);
 
-  // Fetch initial data from Backend Express API
+  // Auth helper - attaches JWT to all requests
+  const authFetch = (url, options = {}) => {
+    return fetch(url, {
+      ...options,
+      headers: {
+        ...options.headers,
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      }
+    });
+  };
+
+  // Check stored token on mount
+  useEffect(() => {
+    const savedToken = localStorage.getItem('rideRecord_token');
+    if (!savedToken) {
+      setAuthChecked(true);
+      return;
+    }
+
+    fetch(`${API_URL}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${savedToken}` }
+    })
+      .then(res => res.ok ? res.json() : Promise.reject())
+      .then(userData => {
+        setUser(userData);
+        setToken(savedToken);
+      })
+      .catch(() => {
+        localStorage.removeItem('rideRecord_token');
+      })
+      .finally(() => setAuthChecked(true));
+  }, []);
+
+  // Fetch data when user is authenticated
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       const [vehiclesRes, logsRes, maintRes] = await Promise.all([
-        fetch(`${API_URL}/api/vehicles`),
-        fetch(`${API_URL}/api/logs`),
-        fetch(`${API_URL}/api/maintenance`)
+        authFetch(`${API_URL}/api/vehicles`),
+        authFetch(`${API_URL}/api/logs`),
+        authFetch(`${API_URL}/api/maintenance`)
       ]);
 
       if (!vehiclesRes.ok || !logsRes.ok || !maintRes.ok) {
+        if (vehiclesRes.status === 401 || logsRes.status === 401 || maintRes.status === 401) {
+          handleLogout();
+          return;
+        }
         throw new Error('Failed to fetch data from API');
       }
 
@@ -50,7 +93,6 @@ export default function App() {
       setLogs(logsData);
       setMaintenanceLogs(maintData);
 
-      // Set active vehicle if not set or invalid
       if (vehiclesData.length > 0) {
         const isValidActive = vehiclesData.some(v => v.id === activeVehicleId);
         if (!activeVehicleId || !isValidActive) {
@@ -67,8 +109,8 @@ export default function App() {
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (user && token) fetchData();
+  }, [user, token]);
 
   // Save active vehicle preference
   useEffect(() => {
@@ -79,23 +121,44 @@ export default function App() {
     }
   }, [activeVehicleId]);
 
+  // Auth handlers
+  const handleLogin = (userData, newToken) => {
+    setUser(userData);
+    setToken(newToken);
+    localStorage.setItem('rideRecord_token', newToken);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('rideRecord_token');
+    localStorage.removeItem('ridecheck_active_vehicle_id');
+    setUser(null);
+    setToken(null);
+    setVehicles([]);
+    setLogs([]);
+    setMaintenanceLogs([]);
+    setView('dashboard');
+  };
+
   // Handlers
   const handleAddVehicle = async (newVehicle) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/vehicles`, {
+      const res = await authFetch(`${API_URL}/api/vehicles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newVehicle)
       });
-      if (!res.ok) throw new Error('Failed to add vehicle');
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Failed to add vehicle');
+      }
       const savedVehicle = await res.json();
-      
+
       setVehicles(prev => [...prev, savedVehicle]);
       setActiveVehicleId(savedVehicle.id);
     } catch (err) {
       console.error(err);
-      alert('Error registering vehicle in database.');
+      alert(err.message || 'Error registering vehicle in database.');
     } finally {
       setLoading(false);
     }
@@ -103,12 +166,12 @@ export default function App() {
 
   const handleDeleteVehicle = async (id) => {
     if (!window.confirm('Are you sure you want to delete this vehicle?')) return;
-    
+
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/vehicles/${id}`, { method: 'DELETE' });
+      const res = await authFetch(`${API_URL}/api/vehicles/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to delete vehicle');
-      
+
       setVehicles(prev => prev.filter(v => v.id !== id));
       if (activeVehicleId === id) {
         const remaining = vehicles.filter(v => v.id !== id);
@@ -134,9 +197,8 @@ export default function App() {
   const handleEndRide = async (newTripLog, finalOdometer) => {
     try {
       setLoading(true);
-      
-      // 1. Post new trip log
-      const logRes = await fetch(`${API_URL}/api/logs`, {
+
+      const logRes = await authFetch(`${API_URL}/api/logs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newTripLog)
@@ -144,8 +206,7 @@ export default function App() {
       if (!logRes.ok) throw new Error('Failed to post trip log');
       const savedLog = await logRes.json();
 
-      // 2. Update vehicle odometer
-      const odoRes = await fetch(`${API_URL}/api/vehicles/${newTripLog.vehicleId}/odo`, {
+      const odoRes = await authFetch(`${API_URL}/api/vehicles/${newTripLog.vehicleId}/odo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ currentOdometer: finalOdometer })
@@ -153,10 +214,9 @@ export default function App() {
       if (!odoRes.ok) throw new Error('Failed to update vehicle odometer');
       const updatedVehicle = await odoRes.json();
 
-      // Sync local state
       setLogs(prev => [savedLog, ...prev]);
       setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
-      
+
       setView('logs');
       setCurrentSafetyCheck(null);
     } catch (err) {
@@ -170,14 +230,14 @@ export default function App() {
   const handleAddMaintenanceLog = async (log) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/maintenance`, {
+      const res = await authFetch(`${API_URL}/api/maintenance`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(log)
       });
       if (!res.ok) throw new Error('Failed to add maintenance log');
       const savedLog = await res.json();
-      
+
       setMaintenanceLogs(prev => [savedLog, ...prev]);
     } catch (err) {
       console.error(err);
@@ -190,7 +250,7 @@ export default function App() {
   const handleResetVehicleServiceOdo = async (vehId, serviceOdo) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/vehicles/${vehId}/odo`, {
+      const res = await authFetch(`${API_URL}/api/vehicles/${vehId}/odo`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lastServiceOdometer: serviceOdo })
@@ -210,7 +270,7 @@ export default function App() {
   const handleClearLogs = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/api/logs`, { method: 'DELETE' });
+      const res = await authFetch(`${API_URL}/api/logs`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Failed to clear logs');
       setLogs([]);
     } catch (err) {
@@ -223,6 +283,40 @@ export default function App() {
 
   const selectedVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
 
+  // ─── AUTH GATE ───────────────────────────────────────────────────────
+
+  if (!authChecked) {
+    return (
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--bg-dark)'
+      }}>
+        <div style={{
+          width: '50px',
+          height: '50px',
+          border: '4px solid rgba(0, 242, 254, 0.15)',
+          borderTopColor: 'var(--cyan)',
+          borderRadius: '50%',
+          animation: 'rotateDial 1s linear infinite'
+        }} />
+        <span style={{ fontSize: '14px', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', color: 'var(--cyan)', fontWeight: 'bold' }}>
+          INITIALIZING SYSTEM...
+        </span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Login API_URL={API_URL} onLogin={handleLogin} />;
+  }
+
+  // ─── MAIN APP ────────────────────────────────────────────────────────
+
   return (
     <div className="app-container">
       {/* Top Navbar Header */}
@@ -231,7 +325,7 @@ export default function App() {
           <div className="logo-icon">R</div>
           <span className="logo-text">RideMaintenance</span>
         </div>
-        
+
         {/* Navigation links (Desktop) */}
         {view !== 'active_ride' && (
           <nav className="nav-links">
@@ -247,37 +341,40 @@ export default function App() {
             <button className={`nav-item ${view === 'maintenance' ? 'active' : ''}`} onClick={() => setView('maintenance')}>
               Maintenance
             </button>
+            <button className="nav-item" onClick={handleLogout} style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>
+              Logout
+            </button>
           </nav>
         )}
       </header>
 
       {/* Database loading overlay */}
       {loading && (
-        <div 
-          style={{ 
-            position: 'fixed', 
-            top: 0, 
-            left: 0, 
-            right: 0, 
-            bottom: 0, 
-            background: 'rgba(8, 11, 17, 0.75)', 
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(8, 11, 17, 0.75)',
             backdropFilter: 'blur(8px)',
-            zIndex: 9999, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: '16px', 
-            alignItems: 'center', 
-            justifyContent: 'center' 
+            zIndex: 9999,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
         >
-          <div 
-            style={{ 
-              width: '50px', 
-              height: '50px', 
-              border: '4px solid rgba(0, 242, 254, 0.15)', 
-              borderTopColor: 'var(--cyan)', 
-              borderRadius: '50%', 
-              animation: 'rotateDial 1s linear infinite' 
+          <div
+            style={{
+              width: '50px',
+              height: '50px',
+              border: '4px solid rgba(0, 242, 254, 0.15)',
+              borderTopColor: 'var(--cyan)',
+              borderRadius: '50%',
+              animation: 'rotateDial 1s linear infinite'
             }}
           />
           <span style={{ fontSize: '14px', fontFamily: 'var(--font-display)', letterSpacing: '0.1em', color: 'var(--cyan)', fontWeight: 'bold' }}>
@@ -289,7 +386,7 @@ export default function App() {
       {/* Main Panel Content Render Area */}
       <main className="main-content">
         {view === 'dashboard' && (
-          <Dashboard 
+          <Dashboard
             vehicles={vehicles}
             logs={logs}
             activeVehicleId={activeVehicleId}
@@ -299,21 +396,21 @@ export default function App() {
           />
         )}
         {view === 'checklist' && (
-          <RideChecklist 
+          <RideChecklist
             vehicle={selectedVehicle}
             onComplete={handleCompleteChecklist}
             onCancel={() => setView('dashboard')}
           />
         )}
         {view === 'active_ride' && (
-          <ActiveRide 
+          <ActiveRide
             vehicle={selectedVehicle}
             safetyCheckData={currentSafetyCheck}
             onEndRide={handleEndRide}
           />
         )}
         {view === 'vehicles' && (
-          <VehicleManager 
+          <VehicleManager
             vehicles={vehicles}
             onAddVehicle={handleAddVehicle}
             onDeleteVehicle={handleDeleteVehicle}
@@ -322,13 +419,13 @@ export default function App() {
           />
         )}
         {view === 'logs' && (
-          <RideLogs 
+          <RideLogs
             logs={logs}
             onClearLogs={handleClearLogs}
           />
         )}
         {view === 'maintenance' && (
-          <MaintenanceTracker 
+          <MaintenanceTracker
             vehicles={vehicles}
             maintenanceLogs={maintenanceLogs}
             onAddMaintenanceLog={handleAddMaintenanceLog}
@@ -346,7 +443,7 @@ export default function App() {
             </svg>
             <span>Home</span>
           </button>
-          
+
           <button className={`bottom-nav-item ${view === 'vehicles' ? 'active' : ''}`} onClick={() => setView('vehicles')}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.129-1.125v-3.07M14.25 18.75H8.25m6-10.5V6a2.25 2.25 0 0 0-2.25-2.25h-1.5A2.25 2.25 0 0 0 8.25 6v2.25M3 14.25c0-1.243 1.007-2.25 2.25-2.25h13.5c1.243 0 2.25 1.007 2.25 2.25v2.25H3v-2.25Z" />
@@ -366,6 +463,13 @@ export default function App() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A1.75 1.75 0 1 0 20 18.25l-5.83-5.83M11.42 15.17l-4.66-4.66m4.66 4.66 4.66-4.66m-4.66 4.66V21m0-5.83V9.17m0 0L17.25 3A1.75 1.75 0 0 0 14.5.25l-5.83 5.83m3.17 3.09-4.66-4.66m4.66 4.66-4.66 4.66M6.76 10.51 1 16.25A1.75 1.75 0 1 0 3.75 19l5.83-5.83" />
             </svg>
             <span>Service</span>
+          </button>
+
+          <button className="bottom-nav-item" onClick={handleLogout}>
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+            </svg>
+            <span>Logout</span>
           </button>
         </div>
       )}

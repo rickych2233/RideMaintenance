@@ -1,9 +1,13 @@
 const express = require('express');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { initDb, dbQuery } = require('./db.cjs');
+const authMiddleware = require('./auth.cjs');
 
 const app = express();
 const PORT = 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
 
 // Initialize Database
 initDb();
@@ -18,10 +22,98 @@ app.use((req, res, next) => {
   next();
 });
 
-// VEHICLES ENDPOINTS
+// ─── AUTH ROUTES (public) ───────────────────────────────────────────────
+
+app.post('/api/auth/register', async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: 'Name, email, and password are required.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters.' });
+  }
+
+  try {
+    const existing = await dbQuery.get('SELECT id FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (existing) {
+      return res.status(400).json({ error: 'Email already registered.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const result = await dbQuery.get(
+      `INSERT INTO users (name, email, password) VALUES (?, ?, ?) RETURNING id`,
+      [name, email.toLowerCase(), hashedPassword]
+    );
+
+    const token = jwt.sign({ userId: result.id, email: email.toLowerCase() }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.status(201).json({
+      id: result.id,
+      name,
+      email: email.toLowerCase(),
+      token
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  try {
+    const user = await dbQuery.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()]);
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+
+    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      token
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/auth/me', authMiddleware, async (req, res) => {
+  try {
+    const user = await dbQuery.get('SELECT id, name, email, createdAt FROM users WHERE id = ?', [req.user.userId]);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── AUTH MIDDLEWARE FOR DATA ROUTES ────────────────────────────────────
+
+app.use('/api', (req, res, next) => {
+  if (req.path.startsWith('/auth/')) return next();
+  return authMiddleware(req, res, next);
+});
+
+// ─── VEHICLES ENDPOINTS ─────────────────────────────────────────────────
+
 app.get('/api/vehicles', async (req, res) => {
   try {
-    const vehicles = await dbQuery.all('SELECT * FROM vehicles ORDER BY id ASC');
+    const vehicles = await dbQuery.all('SELECT * FROM vehicles WHERE userId = ? ORDER BY id ASC', [req.user.userId]);
     res.json(vehicles);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -35,10 +127,17 @@ app.post('/api/vehicles', async (req, res) => {
   }
 
   try {
+    // Enforce max 3 vehicles per user
+    const countResult = await dbQuery.get('SELECT COUNT(*) as count FROM vehicles WHERE userId = ?', [req.user.userId]);
+    if (parseInt(countResult.count) >= 3) {
+      return res.status(400).json({ error: 'Maximum of 3 vehicles allowed per user.' });
+    }
+
     const result = await dbQuery.get(
-      `INSERT INTO vehicles (name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
+        req.user.userId,
         name,
         type || 'motorcycle',
         brand,
@@ -59,7 +158,7 @@ app.post('/api/vehicles', async (req, res) => {
 
 app.delete('/api/vehicles/:id', async (req, res) => {
   try {
-    await dbQuery.run('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
+    await dbQuery.run('DELETE FROM vehicles WHERE id = ? AND userId = ?', [req.params.id, req.user.userId]);
     res.json({ message: 'Vehicle deleted successfully.', id: req.params.id });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -71,8 +170,7 @@ app.put('/api/vehicles/:id/odo', async (req, res) => {
   const vehicleId = req.params.id;
 
   try {
-    // Find vehicle first
-    const vehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [vehicleId]);
+    const vehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ? AND userId = ?', [vehicleId, req.user.userId]);
     if (!vehicle) {
       return res.status(404).json({ error: 'Vehicle not found.' });
     }
@@ -81,8 +179,8 @@ app.put('/api/vehicles/:id/odo', async (req, res) => {
     const nextLastService = lastServiceOdometer !== undefined ? parseInt(lastServiceOdometer) : vehicle.lastServiceOdometer;
 
     await dbQuery.run(
-      'UPDATE vehicles SET currentOdometer = ?, lastServiceOdometer = ? WHERE id = ?',
-      [nextCurrent, nextLastService, vehicleId]
+      'UPDATE vehicles SET currentOdometer = ?, lastServiceOdometer = ? WHERE id = ? AND userId = ?',
+      [nextCurrent, nextLastService, vehicleId, req.user.userId]
     );
 
     const updated = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [vehicleId]);
@@ -92,10 +190,11 @@ app.put('/api/vehicles/:id/odo', async (req, res) => {
   }
 });
 
-// RIDE LOGS ENDPOINTS
+// ─── RIDE LOGS ENDPOINTS ────────────────────────────────────────────────
+
 app.get('/api/logs', async (req, res) => {
   try {
-    const logs = await dbQuery.all('SELECT * FROM ride_logs ORDER BY id DESC');
+    const logs = await dbQuery.all('SELECT * FROM ride_logs WHERE userId = ? ORDER BY id DESC', [req.user.userId]);
     res.json(logs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -104,16 +203,17 @@ app.get('/api/logs', async (req, res) => {
 
 app.post('/api/logs', async (req, res) => {
   const { vehicleId, vehicleName, date, distance, duration, startOdometer, endOdometer, safetyScore, safetyAlerts, notes } = req.body;
-  
+
   if (!vehicleId || !vehicleName || distance === undefined || duration === undefined) {
     return res.status(400).json({ error: 'Missing required trip fields.' });
   }
 
   try {
     const result = await dbQuery.get(
-      `INSERT INTO ride_logs (vehicleId, vehicleName, date, distance, duration, startOdometer, endOdometer, safetyScore, safetyAlerts, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO ride_logs (userId, vehicleId, vehicleName, date, distance, duration, startOdometer, endOdometer, safetyScore, safetyAlerts, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
+        req.user.userId,
         parseInt(vehicleId),
         vehicleName,
         date || new Date().toLocaleDateString(),
@@ -135,17 +235,18 @@ app.post('/api/logs', async (req, res) => {
 
 app.delete('/api/logs', async (req, res) => {
   try {
-    await dbQuery.run('DELETE FROM ride_logs');
+    await dbQuery.run('DELETE FROM ride_logs WHERE userId = ?', [req.user.userId]);
     res.json({ message: 'All ride logs successfully cleared.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// MAINTENANCE LOGS ENDPOINTS
+// ─── MAINTENANCE LOGS ENDPOINTS ─────────────────────────────────────────
+
 app.get('/api/maintenance', async (req, res) => {
   try {
-    const maintLogs = await dbQuery.all('SELECT * FROM maintenance_logs ORDER BY id DESC');
+    const maintLogs = await dbQuery.all('SELECT * FROM maintenance_logs WHERE userId = ? ORDER BY id DESC', [req.user.userId]);
     res.json(maintLogs);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -161,9 +262,10 @@ app.post('/api/maintenance', async (req, res) => {
 
   try {
     const result = await dbQuery.get(
-      `INSERT INTO maintenance_logs (vehicleId, vehicleName, serviceType, date, odometer, cost, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO maintenance_logs (userId, vehicleId, vehicleName, serviceType, date, odometer, cost, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
+        req.user.userId,
         parseInt(vehicleId),
         vehicleName,
         serviceType,
