@@ -1,5 +1,4 @@
 const pg = require('pg');
-const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 
@@ -20,6 +19,7 @@ if (isPg) {
   });
 } else {
   console.log('💾 [Database] DATABASE_URL is not configured. Falling back to local SQLite...');
+  const sqlite3 = require('sqlite3').verbose();
   const dbPath = path.join(__dirname, '../database.sqlite');
   sqliteDb = new sqlite3.Database(dbPath);
 }
