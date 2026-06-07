@@ -3,19 +3,22 @@ const path = require('path');
 const fs = require('fs');
 
 console.log('🔍 [Diagnostics] DATABASE_URL BEFORE DOTENV:', JSON.stringify(process.env.DATABASE_URL));
+console.log('🔍 [Diagnostics] SUPABASE_DATABASE_URL BEFORE DOTENV:', JSON.stringify(process.env.SUPABASE_DATABASE_URL));
 
 // Load environment variables from .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 console.log('🔍 [Diagnostics] DATABASE_URL raw value:', JSON.stringify(process.env.DATABASE_URL));
-if (process.env.DATABASE_URL) {
-  console.log(`🔍 [Diagnostics] DATABASE_URL found! Type: ${typeof process.env.DATABASE_URL}, Length: ${process.env.DATABASE_URL.length}, Starts with: ${process.env.DATABASE_URL.substring(0, 15)}...`);
+console.log('🔍 [Diagnostics] SUPABASE_DATABASE_URL raw value:', JSON.stringify(process.env.SUPABASE_DATABASE_URL));
+if (process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL) {
+  const activeUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+  console.log(`🔍 [Diagnostics] Database URL found! Type: ${typeof activeUrl}, Length: ${activeUrl.length}, Starts with: ${activeUrl.substring(0, 15)}...`);
 } else {
-  console.log('🔍 [Diagnostics] DATABASE_URL is completely UNDEFINED in process.env');
+  console.log('🔍 [Diagnostics] Both DATABASE_URL and SUPABASE_DATABASE_URL are completely UNDEFINED');
 }
 console.log('🔍 [Diagnostics] Available Env Keys:', Object.keys(process.env));
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
 const isPg = !!databaseUrl && !databaseUrl.includes('username:password') && databaseUrl.trim() !== '';
 console.log('🔍 [Diagnostics] Evaluated isPg status:', isPg);
 
