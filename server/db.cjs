@@ -5,15 +5,16 @@ const fs = require('fs');
 // Load environment variables from .env
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
-console.log('🔍 [Diagnostics] Available Env Keys:', Object.keys(process.env));
 if (process.env.DATABASE_URL) {
   console.log(`🔍 [Diagnostics] DATABASE_URL found! Type: ${typeof process.env.DATABASE_URL}, Length: ${process.env.DATABASE_URL.length}, Starts with: ${process.env.DATABASE_URL.substring(0, 15)}...`);
 } else {
   console.log('🔍 [Diagnostics] DATABASE_URL is completely UNDEFINED in process.env');
 }
+console.log('🔍 [Diagnostics] Available Env Keys:', Object.keys(process.env));
 
 const databaseUrl = process.env.DATABASE_URL;
 const isPg = !!databaseUrl && !databaseUrl.includes('username:password') && databaseUrl.trim() !== '';
+console.log('🔍 [Diagnostics] Evaluated isPg status:', isPg);
 
 let pool = null;
 let sqliteDb = null;
