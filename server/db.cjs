@@ -51,6 +51,7 @@ function camelCaseKeys(obj) {
     else if (key === 'servicetype') newKey = 'serviceType';
     else if (key === 'userid') newKey = 'userId';
     else if (key === 'createdat') newKey = 'createdAt';
+    else if (key === 'oilinterval') newKey = 'oilInterval';
 
     result[newKey] = camelCaseKeys(obj[key]);
   }
@@ -133,7 +134,8 @@ function initDb() {
         currentOdometer INTEGER NOT NULL DEFAULT 0,
         lastServiceOdometer INTEGER NOT NULL DEFAULT 0,
         tankCapacity REAL NOT NULL DEFAULT 10,
-        serviceInterval INTEGER NOT NULL DEFAULT 3000
+        serviceInterval INTEGER NOT NULL DEFAULT 3000,
+        oilInterval INTEGER NOT NULL DEFAULT 2000
       )`
     : `CREATE TABLE IF NOT EXISTS vehicles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,7 +148,8 @@ function initDb() {
         currentOdometer INTEGER NOT NULL DEFAULT 0,
         lastServiceOdometer INTEGER NOT NULL DEFAULT 0,
         tankCapacity REAL NOT NULL DEFAULT 10,
-        serviceInterval INTEGER NOT NULL DEFAULT 3000
+        serviceInterval INTEGER NOT NULL DEFAULT 3000,
+        oilInterval INTEGER NOT NULL DEFAULT 2000
       )`;
 
   const rideLogsSchema = isPg
@@ -209,6 +212,14 @@ function initDb() {
       await dbQuery.run(vehicleSchema);
       await dbQuery.run(rideLogsSchema);
       await dbQuery.run(maintenanceLogsSchema);
+      
+      // Auto-migrate column if not exists
+      try {
+        await dbQuery.run('ALTER TABLE vehicles ADD COLUMN oilInterval INTEGER NOT NULL DEFAULT 2000;');
+      } catch (err) {
+        // Column likely already exists, ignore
+      }
+
       console.log('Database tables successfully checked/initialized.');
     } catch (err) {
       console.error('Error initializing database:', err);

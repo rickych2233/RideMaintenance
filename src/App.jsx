@@ -185,6 +185,25 @@ export default function App() {
     }
   };
 
+  const handleUpdateVehicle = async (id, updatedData) => {
+    try {
+      setLoading(true);
+      const res = await authFetch(`${API_URL}/api/vehicles/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedData)
+      });
+      if (!res.ok) throw new Error('Failed to update vehicle');
+      const updatedVehicle = await res.json();
+      setVehicles(prev => prev.map(v => v.id === id ? updatedVehicle : v));
+    } catch (err) {
+      console.error(err);
+      alert('Error updating vehicle on server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStartRideCheck = () => {
     setView('checklist');
   };
@@ -416,6 +435,7 @@ export default function App() {
             vehicles={vehicles}
             onAddVehicle={handleAddVehicle}
             onDeleteVehicle={handleDeleteVehicle}
+            onUpdateVehicle={handleUpdateVehicle}
             activeVehicleId={activeVehicleId}
             setActiveVehicleId={setActiveVehicleId}
           />

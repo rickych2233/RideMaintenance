@@ -121,7 +121,7 @@ app.get('/api/vehicles', async (req, res) => {
 });
 
 app.post('/api/vehicles', async (req, res) => {
-  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval } = req.body;
+  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval } = req.body;
   if (!name || !brand || !model) {
     return res.status(400).json({ error: 'Name, brand, and model are required.' });
   }
@@ -134,8 +134,8 @@ app.post('/api/vehicles', async (req, res) => {
     }
 
     const result = await dbQuery.get(
-      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         req.user.userId,
         name,
@@ -146,7 +146,8 @@ app.post('/api/vehicles', async (req, res) => {
         parseInt(currentOdometer || 0),
         parseInt(lastServiceOdometer || currentOdometer || 0),
         parseFloat(tankCapacity || 10),
-        parseInt(serviceInterval || 3000)
+        parseInt(serviceInterval || 3000),
+        parseInt(oilInterval || 2000)
       ]
     );
     const newVehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [result.id]);
@@ -160,6 +161,41 @@ app.delete('/api/vehicles/:id', async (req, res) => {
   try {
     await dbQuery.run('DELETE FROM vehicles WHERE id = ? AND userId = ?', [req.params.id, req.user.userId]);
     res.json({ message: 'Vehicle deleted successfully.', id: req.params.id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/vehicles/:id', async (req, res) => {
+  const { name, type, brand, model, licensePlate, tankCapacity, serviceInterval, oilInterval } = req.body;
+  const vehicleId = req.params.id;
+
+  try {
+    const vehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ? AND userId = ?', [vehicleId, req.user.userId]);
+    if (!vehicle) {
+      return res.status(404).json({ error: 'Vehicle not found.' });
+    }
+
+    await dbQuery.run(
+      `UPDATE vehicles 
+       SET name = ?, type = ?, brand = ?, model = ?, licensePlate = ?, tankCapacity = ?, serviceInterval = ?, oilInterval = ?
+       WHERE id = ? AND userId = ?`,
+      [
+        name || vehicle.name,
+        type || vehicle.type,
+        brand || vehicle.brand,
+        model || vehicle.model,
+        licensePlate !== undefined ? licensePlate : vehicle.licensePlate,
+        parseFloat(tankCapacity || vehicle.tankCapacity),
+        parseInt(serviceInterval || vehicle.serviceInterval),
+        parseInt(oilInterval || vehicle.oilInterval || 2000),
+        vehicleId,
+        req.user.userId
+      ]
+    );
+
+    const updated = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [vehicleId]);
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -296,7 +332,7 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
       const lastOilChange = allLogs.find(l => l.vehicleId === v.id);
       const lastOdo = lastOilChange ? lastOilChange.odometer : 0;
       const lastDate = lastOilChange ? lastOilChange.date : null;
-      const interval = v.serviceInterval || 3000;
+      const interval = v.oilInterval || 2000;
       const kmSince = v.currentOdometer - lastOdo;
       const remaining = interval - kmSince;
 

@@ -4,10 +4,12 @@ export default function VehicleManager({
   vehicles, 
   onAddVehicle, 
   onDeleteVehicle, 
+  onUpdateVehicle,
   activeVehicleId, 
   setActiveVehicleId 
 }) {
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editVehicleId, setEditVehicleId] = useState(null);
   
   // Form State
   const [name, setName] = useState('');
@@ -18,31 +20,24 @@ export default function VehicleManager({
   const [odometer, setOdometer] = useState(0);
   const [tankCapacity, setTankCapacity] = useState(10);
   const [serviceInterval, setServiceInterval] = useState(3000);
+  const [oilInterval, setOilInterval] = useState(2000);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!name || !brand || !model) {
-      alert('Please fill out all required fields.');
-      return;
-    }
+  const openEditModal = (vehicle) => {
+    setEditVehicleId(vehicle.id);
+    setName(vehicle.name);
+    setType(vehicle.type);
+    setBrand(vehicle.brand);
+    setModel(vehicle.model);
+    setLicensePlate(vehicle.licensePlate || '');
+    setOdometer(vehicle.currentOdometer);
+    setTankCapacity(vehicle.tankCapacity);
+    setServiceInterval(vehicle.serviceInterval);
+    setOilInterval(vehicle.oilInterval || 2000);
+    setShowAddModal(true);
+  };
 
-    const newVehicle = {
-      id: Date.now(),
-      name,
-      type,
-      brand,
-      model,
-      licensePlate,
-      currentOdometer: parseInt(odometer || 0),
-      lastServiceOdometer: parseInt(odometer || 0),
-      tankCapacity: parseFloat(tankCapacity || 10),
-      serviceInterval: parseInt(serviceInterval || 3000)
-    };
-
-    onAddVehicle(newVehicle);
-    setShowAddModal(false);
-
-    // Reset Form
+  const openAddModal = () => {
+    setEditVehicleId(null);
     setName('');
     setType('motorcycle');
     setBrand('');
@@ -51,6 +46,46 @@ export default function VehicleManager({
     setOdometer(0);
     setTankCapacity(10);
     setServiceInterval(3000);
+    setOilInterval(2000);
+    setShowAddModal(true);
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!name || !brand || !model) {
+      alert('Please fill out all required fields.');
+      return;
+    }
+
+    if (editVehicleId) {
+      onUpdateVehicle(editVehicleId, {
+        name,
+        type,
+        brand,
+        model,
+        licensePlate,
+        tankCapacity: parseFloat(tankCapacity || 10),
+        serviceInterval: parseInt(serviceInterval || 3000),
+        oilInterval: parseInt(oilInterval || 2000)
+      });
+    } else {
+      const newVehicle = {
+        id: Date.now(),
+        name,
+        type,
+        brand,
+        model,
+        licensePlate,
+        currentOdometer: parseInt(odometer || 0),
+        lastServiceOdometer: parseInt(odometer || 0),
+        tankCapacity: parseFloat(tankCapacity || 10),
+        serviceInterval: parseInt(serviceInterval || 3000),
+        oilInterval: parseInt(oilInterval || 2000)
+      };
+      onAddVehicle(newVehicle);
+    }
+
+    setShowAddModal(false);
   };
 
   return (
@@ -64,7 +99,7 @@ export default function VehicleManager({
         </div>
         <button
           className="btn btn-primary"
-          onClick={() => setShowAddModal(true)}
+          onClick={openAddModal}
           disabled={vehicles.length >= 3}
           style={vehicles.length >= 3 ? { opacity: 0.5, cursor: 'not-allowed', fontSize: '13px', padding: '10px 14px' } : { fontSize: '13px', padding: '10px 14px' }}
         >
@@ -103,6 +138,13 @@ export default function VehicleManager({
                       Use
                     </button>
                   )}
+                  <button 
+                    className="btn btn-secondary" 
+                    style={{ padding: '6px 10px', fontSize: '12px' }}
+                    onClick={() => openEditModal(v)}
+                  >
+                    ✏️
+                  </button>
                   <button 
                     className="btn btn-danger" 
                     style={{ padding: '6px 10px', fontSize: '12px' }}
@@ -160,7 +202,7 @@ export default function VehicleManager({
         {vehicles.length === 0 && (
           <div style={{ gridColumn: 'span 3', textAlign: 'center', padding: '48px 0', border: '1px dashed var(--border-color)', borderRadius: 'var(--radius-lg)' }}>
             <p style={{ color: 'var(--text-muted)', marginBottom: '16px' }}>No vehicles registered in your garage yet.</p>
-            <button className="btn btn-primary" onClick={() => setShowAddModal(true)} disabled={false}>
+            <button className="btn btn-primary" onClick={openAddModal} disabled={false}>
               Register Your First Vehicle
             </button>
           </div>
@@ -171,7 +213,7 @@ export default function VehicleManager({
       {showAddModal && (
         <div className="modal-overlay" onClick={() => setShowAddModal(false)}>
           <div className="modal-content glass-panel" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ fontSize: '20px', marginBottom: '16px' }}>Register Vehicle</h3>
+            <h3 style={{ fontSize: '20px', marginBottom: '16px' }}>{editVehicleId ? 'Edit Vehicle' : 'Register Vehicle'}</h3>
             <form onSubmit={handleSubmit}>
               
               <div className="form-group">
@@ -244,6 +286,7 @@ export default function VehicleManager({
                     className="form-control" 
                     value={odometer}
                     onChange={(e) => setOdometer(e.target.value)}
+                    disabled={!!editVehicleId}
                   />
                 </div>
                 <div className="form-group">
@@ -258,18 +301,34 @@ export default function VehicleManager({
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Service Reminder Interval (km)</label>
-                <input 
-                  type="number" 
-                  className="form-control" 
-                  placeholder="Service reminder every X km"
-                  value={serviceInterval}
-                  onChange={(e) => setServiceInterval(e.target.value)}
-                />
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  We'll warn you when you drive this distance since your last maintenance.
-                </span>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Service Reminder Interval (km)</label>
+                  <input 
+                    type="number" 
+                    className="form-control" 
+                    placeholder="General service every X km"
+                    value={serviceInterval}
+                    onChange={(e) => setServiceInterval(e.target.value)}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Distance between general maintenance.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Oil Change Interval (km)</label>
+                  <input 
+                    type="number" 
+                    className="form-control" 
+                    placeholder="Oil change every X km"
+                    value={oilInterval}
+                    onChange={(e) => setOilInterval(e.target.value)}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Custom oil replacement threshold.
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>
