@@ -21,6 +21,7 @@ export default function VehicleManager({
   const [tankCapacity, setTankCapacity] = useState(10);
   const [serviceInterval, setServiceInterval] = useState(3000);
   const [oilInterval, setOilInterval] = useState(2000);
+  const [oilReminderFrequency, setOilReminderFrequency] = useState('weekly');
 
   const openEditModal = (vehicle) => {
     setEditVehicleId(vehicle.id);
@@ -33,6 +34,7 @@ export default function VehicleManager({
     setTankCapacity(vehicle.tankCapacity);
     setServiceInterval(vehicle.serviceInterval);
     setOilInterval(vehicle.oilInterval || 2000);
+    setOilReminderFrequency(vehicle.oilReminderFrequency || 'weekly');
     setShowAddModal(true);
   };
 
@@ -47,6 +49,7 @@ export default function VehicleManager({
     setTankCapacity(10);
     setServiceInterval(3000);
     setOilInterval(2000);
+    setOilReminderFrequency('weekly');
     setShowAddModal(true);
   };
 
@@ -66,7 +69,8 @@ export default function VehicleManager({
         licensePlate,
         tankCapacity: parseFloat(tankCapacity || 10),
         serviceInterval: parseInt(serviceInterval || 3000),
-        oilInterval: parseInt(oilInterval || 2000)
+        oilInterval: parseInt(oilInterval || 2000),
+        oilReminderFrequency
       });
     } else {
       const newVehicle = {
@@ -80,7 +84,8 @@ export default function VehicleManager({
         lastServiceOdometer: parseInt(odometer || 0),
         tankCapacity: parseFloat(tankCapacity || 10),
         serviceInterval: parseInt(serviceInterval || 3000),
-        oilInterval: parseInt(oilInterval || 2000)
+        oilInterval: parseInt(oilInterval || 2000),
+        oilReminderFrequency
       };
       onAddVehicle(newVehicle);
     }
@@ -329,6 +334,22 @@ export default function VehicleManager({
                     Custom oil replacement threshold.
                   </span>
                 </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Oil Reminder Alert Frequency</label>
+                <select 
+                  className="form-control"
+                  value={oilReminderFrequency}
+                  onChange={(e) => setOilReminderFrequency(e.target.value)}
+                >
+                  <option value="daily">📅 Daily (Sehari sekali)</option>
+                  <option value="weekly">📅 Weekly (Seminggu sekali)</option>
+                  <option value="monthly">📅 Monthly (Sebulan sekali)</option>
+                </select>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                  Choose how often you want to be reminded when oil replacement is due.
+                </span>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>

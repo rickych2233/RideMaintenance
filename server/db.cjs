@@ -52,6 +52,8 @@ function camelCaseKeys(obj) {
     else if (key === 'userid') newKey = 'userId';
     else if (key === 'createdat') newKey = 'createdAt';
     else if (key === 'oilinterval') newKey = 'oilInterval';
+    else if (key === 'oilreminderfrequency') newKey = 'oilReminderFrequency';
+    else if (key === 'lastoilreminderdate') newKey = 'lastOilReminderDate';
 
     result[newKey] = camelCaseKeys(obj[key]);
   }
@@ -135,7 +137,9 @@ function initDb() {
         lastServiceOdometer INTEGER NOT NULL DEFAULT 0,
         tankCapacity REAL NOT NULL DEFAULT 10,
         serviceInterval INTEGER NOT NULL DEFAULT 3000,
-        oilInterval INTEGER NOT NULL DEFAULT 2000
+        oilInterval INTEGER NOT NULL DEFAULT 2000,
+        oilReminderFrequency VARCHAR(50) NOT NULL DEFAULT 'weekly',
+        lastOilReminderDate VARCHAR(50)
       )`
     : `CREATE TABLE IF NOT EXISTS vehicles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,7 +153,9 @@ function initDb() {
         lastServiceOdometer INTEGER NOT NULL DEFAULT 0,
         tankCapacity REAL NOT NULL DEFAULT 10,
         serviceInterval INTEGER NOT NULL DEFAULT 3000,
-        oilInterval INTEGER NOT NULL DEFAULT 2000
+        oilInterval INTEGER NOT NULL DEFAULT 2000,
+        oilReminderFrequency TEXT NOT NULL DEFAULT 'weekly',
+        lastOilReminderDate TEXT
       )`;
 
   const rideLogsSchema = isPg
@@ -218,6 +224,18 @@ function initDb() {
         await dbQuery.run('ALTER TABLE vehicles ADD COLUMN oilInterval INTEGER NOT NULL DEFAULT 2000;');
       } catch (err) {
         // Column likely already exists, ignore
+      }
+
+      try {
+        await dbQuery.run("ALTER TABLE vehicles ADD COLUMN oilReminderFrequency VARCHAR(50) NOT NULL DEFAULT 'weekly';");
+      } catch (err) {
+        // Ignore if exists
+      }
+
+      try {
+        await dbQuery.run("ALTER TABLE vehicles ADD COLUMN lastOilReminderDate VARCHAR(50);");
+      } catch (err) {
+        // Ignore if exists
       }
 
       console.log('Database tables successfully checked/initialized.');

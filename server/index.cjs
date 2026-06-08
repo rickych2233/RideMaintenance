@@ -121,7 +121,7 @@ app.get('/api/vehicles', async (req, res) => {
 });
 
 app.post('/api/vehicles', async (req, res) => {
-  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval } = req.body;
+  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate } = req.body;
   if (!name || !brand || !model) {
     return res.status(400).json({ error: 'Name, brand, and model are required.' });
   }
@@ -134,8 +134,8 @@ app.post('/api/vehicles', async (req, res) => {
     }
 
     const result = await dbQuery.get(
-      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         req.user.userId,
         name,
@@ -147,7 +147,9 @@ app.post('/api/vehicles', async (req, res) => {
         parseInt(lastServiceOdometer || currentOdometer || 0),
         parseFloat(tankCapacity || 10),
         parseInt(serviceInterval || 3000),
-        parseInt(oilInterval || 2000)
+        parseInt(oilInterval || 2000),
+        oilReminderFrequency || 'weekly',
+        lastOilReminderDate || new Date().toISOString().split('T')[0]
       ]
     );
     const newVehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [result.id]);
@@ -167,7 +169,7 @@ app.delete('/api/vehicles/:id', async (req, res) => {
 });
 
 app.put('/api/vehicles/:id', async (req, res) => {
-  const { name, type, brand, model, licensePlate, tankCapacity, serviceInterval, oilInterval } = req.body;
+  const { name, type, brand, model, licensePlate, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate } = req.body;
   const vehicleId = req.params.id;
 
   try {
@@ -178,7 +180,7 @@ app.put('/api/vehicles/:id', async (req, res) => {
 
     await dbQuery.run(
       `UPDATE vehicles 
-       SET name = ?, type = ?, brand = ?, model = ?, licensePlate = ?, tankCapacity = ?, serviceInterval = ?, oilInterval = ?
+       SET name = ?, type = ?, brand = ?, model = ?, licensePlate = ?, tankCapacity = ?, serviceInterval = ?, oilInterval = ?, oilReminderFrequency = ?, lastOilReminderDate = ?
        WHERE id = ? AND userId = ?`,
       [
         name || vehicle.name,
@@ -189,6 +191,8 @@ app.put('/api/vehicles/:id', async (req, res) => {
         parseFloat(tankCapacity || vehicle.tankCapacity),
         parseInt(serviceInterval || vehicle.serviceInterval),
         parseInt(oilInterval || vehicle.oilInterval || 2000),
+        oilReminderFrequency || vehicle.oilReminderFrequency || 'weekly',
+        lastOilReminderDate !== undefined ? lastOilReminderDate : vehicle.lastOilReminderDate,
         vehicleId,
         req.user.userId
       ]
@@ -336,6 +340,30 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
       const kmSince = v.currentOdometer - lastOdo;
       const remaining = interval - kmSince;
 
+      // Time-based check
+      const freq = v.oilReminderFrequency || 'weekly';
+      const lastCheckStr = v.lastOilReminderDate || lastDate || null;
+      let timeStatus = 'ok';
+      let timeMessage = '';
+
+      if (lastCheckStr) {
+        const lastCheckDate = new Date(lastCheckStr);
+        const today = new Date();
+        const diffTime = Math.abs(today - lastCheckDate);
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        if (freq === 'daily' && diffDays >= 1) {
+          timeStatus = 'due_soon';
+          timeMessage = `Daily check (oil age: ${diffDays} days)`;
+        } else if (freq === 'weekly' && diffDays >= 7) {
+          timeStatus = 'due_soon';
+          timeMessage = `Weekly check (oil age: ${diffDays} days)`;
+        } else if (freq === 'monthly' && diffDays >= 30) {
+          timeStatus = 'due_soon';
+          timeMessage = `Monthly check (oil age: ${diffDays} days)`;
+        }
+      }
+
       let status = 'ok';
       if (!lastOilChange) {
         status = v.currentOdometer > 0 ? 'overdue' : 'ok';
@@ -345,6 +373,11 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
         status = 'due_soon';
       }
 
+      // If odometer status is ok but time frequency threshold has passed
+      if (status === 'ok' && timeStatus !== 'ok') {
+        status = timeStatus;
+      }
+
       return {
         vehicleId: v.id,
         vehicleName: v.name,
@@ -352,10 +385,13 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
         currentOdometer: v.currentOdometer,
         lastOilChangeOdometer: lastOdo,
         lastOilChangeDate: lastDate,
+        oilReminderFrequency: freq,
+        lastOilReminderDate: v.lastOilReminderDate,
         kmSince,
         interval,
         remainingKm: Math.max(0, remaining),
-        status
+        status,
+        timeMessage
       };
     });
 

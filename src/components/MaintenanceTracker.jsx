@@ -5,21 +5,12 @@ export default function MaintenanceTracker({
   maintenanceLogs,
   onAddMaintenanceLog,
   onResetVehicleServiceOdo,
+  onOpenOdoModal,
+  oilStatus = [],
   API_URL,
   token
 }) {
   const [showLogModal, setShowLogModal] = useState(false);
-  const [oilStatus, setOilStatus] = useState([]);
-
-  useEffect(() => {
-    if (!token) return;
-    fetch(`${API_URL}/api/maintenance/oil-status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setOilStatus(data))
-      .catch(() => {});
-  }, [vehicles, maintenanceLogs, token]);
 
   // Form State
   const [vehicleId, setVehicleId] = useState(vehicles[0]?.id || '');
@@ -150,18 +141,31 @@ export default function MaintenanceTracker({
                   if (!oil || oil.status === 'ok') return null;
                   const oilPercent = Math.min(100, Math.max(0, (oil.kmSince / oil.interval) * 100));
                   return (
-                    <div style={{
-                      marginTop: '12px',
-                      padding: '10px 12px',
-                      background: oil.status === 'overdue'
-                        ? 'rgba(239, 68, 68, 0.08)'
-                        : 'rgba(245, 158, 11, 0.08)',
-                      border: `1px solid ${oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
-                      borderRadius: 'var(--radius-sm)'
-                    }}>
+                    <div 
+                      onClick={() => onOpenOdoModal(v)}
+                      style={{
+                        cursor: 'pointer',
+                        marginTop: '12px',
+                        padding: '10px 12px',
+                        background: oil.status === 'overdue'
+                          ? 'rgba(239, 68, 68, 0.08)'
+                          : 'rgba(245, 158, 11, 0.08)',
+                        border: `1px solid ${oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                        borderRadius: 'var(--radius-sm)',
+                        transition: 'transform 0.15s, border-color 0.15s'
+                      }}
+                      onMouseOver={(e) => {
+                        e.currentTarget.style.transform = 'translateY(-1px)';
+                        e.currentTarget.style.borderColor = oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.6)';
+                      }}
+                      onMouseOut={(e) => {
+                        e.currentTarget.style.transform = 'none';
+                        e.currentTarget.style.borderColor = oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
+                      }}
+                    >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
                         <span style={{ fontSize: '13px', fontWeight: 600, color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
-                          🛢️ Oil Change {oil.status === 'overdue' ? 'OVERDUE' : 'Due Soon'}
+                          🛢️ Oil Change {oil.status === 'overdue' ? 'OVERDUE' : 'Due Soon'} (Klik untuk update)
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           {oil.lastOilChangeDate ? `Last: ${oil.lastOilChangeDate}` : 'No oil change logged'}
@@ -173,8 +177,9 @@ export default function MaintenanceTracker({
                           style={{ width: `${oilPercent}%` }}
                         />
                       </div>
-                      <div style={{ textAlign: 'right', fontSize: '11px', marginTop: '4px', color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
-                        {oil.remainingKm > 0 ? `${oil.remainingKm} km to next oil change` : `Overdue by ${Math.abs(oil.remainingKm)} km!`}
+                      <div style={{ fontSize: '11px', marginTop: '4px', color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{oil.timeMessage ? oil.timeMessage : ''}</span>
+                        <span>{oil.remainingKm > 0 ? `${oil.remainingKm} km to next oil` : `Overdue by ${Math.abs(oil.remainingKm)} km!`}</span>
                       </div>
                     </div>
                   );

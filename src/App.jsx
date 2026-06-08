@@ -6,6 +6,7 @@ import VehicleManager from './components/VehicleManager';
 import RideLogs from './components/RideLogs';
 import MaintenanceTracker from './components/MaintenanceTracker';
 import Login from './components/Login';
+import OdometerUpdateModal from './components/OdometerUpdateModal';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -23,6 +24,7 @@ export default function App() {
   const [vehicles, setVehicles] = useState([]);
   const [logs, setLogs] = useState([]);
   const [maintenanceLogs, setMaintenanceLogs] = useState([]);
+  const [oilStatus, setOilStatus] = useState([]);
 
   // Client-side UI Preferences
   const [activeVehicleId, setActiveVehicleId] = useState(() => {
@@ -32,6 +34,9 @@ export default function App() {
 
   // Active Trip checklist transfer state
   const [currentSafetyCheck, setCurrentSafetyCheck] = useState(null);
+
+  // Odometer & Oil update modal state
+  const [odoUpdateVehicle, setOdoUpdateVehicle] = useState(null);
 
   // Auth helper - attaches JWT to all requests
   const authFetch = (url, options = {}) => {
@@ -111,6 +116,53 @@ export default function App() {
   useEffect(() => {
     if (user && token) fetchData();
   }, [user, token]);
+
+  // Fetch oilStatus whenever vehicles, logs, or maintenanceLogs change
+  useEffect(() => {
+    if (!token) return;
+    authFetch(`${API_URL}/api/maintenance/oil-status`)
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setOilStatus(data))
+      .catch(() => {});
+  }, [vehicles, logs, maintenanceLogs, token]);
+
+  // Request Push Notification permission on user login/mount
+  useEffect(() => {
+    if ('Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(permission => {
+          console.log('Notification permission:', permission);
+        });
+      }
+    }
+  }, [user]);
+
+  // Trigger Push Notification when oil status is overdue or due soon
+  useEffect(() => {
+    if (!oilStatus || oilStatus.length === 0) return;
+    if ('Notification' in window && Notification.permission === 'granted') {
+      oilStatus.forEach(o => {
+        if (o.status !== 'ok') {
+          const sessionKey = `notified_oil_${o.vehicleId}_${o.status}`;
+          if (!sessionStorage.getItem(sessionKey)) {
+            sessionStorage.setItem(sessionKey, 'true');
+
+            const title = o.status === 'overdue' ? '🛢️ Peringatan: Ganti Oli!' : '📅 Pengingat: Ganti Oli Segera';
+            const body = o.status === 'overdue'
+              ? `Oli motor ${o.vehicleName} sudah melewati batas! Silakan ganti sekarang.`
+              : `Oli motor ${o.vehicleName} perlu diganti dalam ${o.remainingKm} km lagi.`;
+
+            new Notification(title, {
+              body: body,
+              icon: '/favicon.ico',
+              tag: `oil-change-${o.vehicleId}`,
+              requireInteraction: true
+            });
+          }
+        }
+      });
+    }
+  }, [oilStatus]);
 
   // Save active vehicle preference
   useEffect(() => {
@@ -286,6 +338,51 @@ export default function App() {
     }
   };
 
+  const handleUpdateOdometer = async (vehId, newOdo) => {
+    try {
+      setLoading(true);
+      const res = await authFetch(`${API_URL}/api/vehicles/${vehId}/odo`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentOdometer: newOdo })
+      });
+      if (!res.ok) throw new Error('Failed to update odometer');
+      const updatedVehicle = await res.json();
+      setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
+    } catch (err) {
+      console.error(err);
+      alert('Error updating odometer on server.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogOilChangeFromModal = async (log, odoValue) => {
+    // 1. Post maintenance log
+    await handleAddMaintenanceLog(log);
+
+    // 2. Reset general service odometer
+    await handleResetVehicleServiceOdo(log.vehicleId, odoValue);
+
+    // 3. Reset lastOilReminderDate to today
+    try {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const res = await authFetch(`${API_URL}/api/vehicles/${log.vehicleId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lastOilReminderDate: todayStr
+        })
+      });
+      if (res.ok) {
+        const updatedVehicle = await res.json();
+        setVehicles(prev => prev.map(v => v.id === updatedVehicle.id ? updatedVehicle : v));
+      }
+    } catch (err) {
+      console.error('Error resetting oil reminder date:', err);
+    }
+  };
+
   const handleClearLogs = async () => {
     try {
       setLoading(true);
@@ -412,6 +509,8 @@ export default function App() {
             setActiveVehicleId={setActiveVehicleId}
             setView={setView}
             onStartRideCheck={handleStartRideCheck}
+            onOpenOdoModal={setOdoUpdateVehicle}
+            oilStatus={oilStatus}
             API_URL={API_URL}
             token={token}
           />
@@ -452,11 +551,22 @@ export default function App() {
             maintenanceLogs={maintenanceLogs}
             onAddMaintenanceLog={handleAddMaintenanceLog}
             onResetVehicleServiceOdo={handleResetVehicleServiceOdo}
+            onOpenOdoModal={setOdoUpdateVehicle}
+            oilStatus={oilStatus}
             API_URL={API_URL}
             token={token}
           />
         )}
       </main>
+
+      {odoUpdateVehicle && (
+        <OdometerUpdateModal
+          vehicle={odoUpdateVehicle}
+          onClose={() => setOdoUpdateVehicle(null)}
+          onUpdateOdometer={handleUpdateOdometer}
+          onLogOilChange={handleLogOilChangeFromModal}
+        />
+      )}
 
       {/* Bottom Navigation (Mobile Viewports only) */}
       {view !== 'active_ride' && (

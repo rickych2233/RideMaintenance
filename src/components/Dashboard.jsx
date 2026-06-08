@@ -7,21 +7,22 @@ export default function Dashboard({
   setActiveVehicleId,
   setView,
   onStartRideCheck,
+  onOpenOdoModal,
+  oilStatus = [],
   API_URL,
   token
 }) {
 
-  const [oilStatus, setOilStatus] = useState([]);
+  const [notifPermission, setNotifPermission] = useState(typeof window !== 'undefined' ? Notification.permission : 'default');
 
-  useEffect(() => {
-    if (!token) return;
-    fetch(`${API_URL}/api/maintenance/oil-status`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setOilStatus(data))
-      .catch(() => {});
-  }, [vehicles, logs, token]);
+  const handleRequestNotifPermission = () => {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(permission => {
+        setNotifPermission(permission);
+      });
+    }
+  };
+
   const activeVehicle = vehicles.find(v => v.id === activeVehicleId) || vehicles[0];
 
   // Calculate statistics
@@ -69,6 +70,36 @@ export default function Dashboard({
 
   return (
     <div className="dashboard-view">
+      {/* Push Notification Opt-in Prompt */}
+      {('Notification' in window) && notifPermission === 'default' && (
+        <div style={{
+          background: 'linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(139, 92, 246, 0.15))',
+          border: '1px solid rgba(0, 242, 254, 0.4)',
+          borderRadius: 'var(--radius-md)',
+          padding: '14px 18px',
+          marginBottom: '20px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '12px',
+          flexWrap: 'wrap'
+        }}>
+          <div>
+            <h4 style={{ margin: 0, fontSize: '14px', color: 'var(--cyan)' }}>🔔 Aktifkan Notifikasi Pengingat Oli</h4>
+            <p style={{ margin: '2px 0 0 0', fontSize: '12px', color: 'var(--text-muted)' }}>
+              Dapatkan peringatan langsung di browser Anda saat sudah saatnya mengganti oli motor.
+            </p>
+          </div>
+          <button 
+            className="btn btn-primary" 
+            style={{ padding: '8px 14px', fontSize: '12px', whiteSpace: 'nowrap' }}
+            onClick={handleRequestNotifPermission}
+          >
+            Izinkan Notifikasi (Allow)
+          </button>
+        </div>
+      )}
+
       {/* Vehicle Quick Selector */}
       <div className="vehicle-selector-bar">
         <div className="selected-vehicle-display">
@@ -154,60 +185,77 @@ export default function Dashboard({
       {/* Oil Change Alarm */}
       {oilStatus.filter(o => o.status !== 'ok').length > 0 && (
         <div style={{ marginTop: '20px' }}>
-          {oilStatus.filter(o => o.status !== 'ok').map(o => (
-            <div
-              key={o.vehicleId}
-              style={{
-                border: `1px solid ${o.status === 'overdue' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(245, 158, 11, 0.5)'}`,
-                background: o.status === 'overdue'
-                  ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))'
-                  : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04))',
-                borderRadius: 'var(--radius-md)',
-                padding: '14px 16px',
-                marginBottom: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: '12px',
-                flexWrap: 'wrap',
-                animation: o.status === 'overdue' ? 'pulseRedBorder 2s ease-in-out infinite' : 'none'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 auto', minWidth: 0 }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  background: o.status === 'overdue' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+          {oilStatus.filter(o => o.status !== 'ok').map(o => {
+            const vehicleObj = vehicles.find(v => v.id === o.vehicleId);
+            return (
+              <div
+                key={o.vehicleId}
+                onClick={() => vehicleObj && onOpenOdoModal(vehicleObj)}
+                style={{
+                  cursor: 'pointer',
+                  border: `1px solid ${o.status === 'overdue' ? 'rgba(239, 68, 68, 0.5)' : 'rgba(245, 158, 11, 0.5)'}`,
+                  background: o.status === 'overdue'
+                    ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(239, 68, 68, 0.04))'
+                    : 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04))',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '14px 16px',
+                  marginBottom: '12px',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px',
-                  flexShrink: 0
-                }}>
-                  🛢️
-                </div>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: '14px', color: o.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
-                    {o.status === 'overdue' ? 'OVERDUE — Oil Change!' : 'Oil Change Due Soon'}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
-                    {o.vehicleName} • {o.status === 'overdue'
-                      ? `Overdue by ${Math.abs(o.remainingKm)} km`
-                      : `${o.remainingKm} km remaining`
-                    }
-                  </div>
-                </div>
-              </div>
-              <button
-                className="btn btn-primary"
-                style={{ padding: '8px 14px', fontSize: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}
-                onClick={() => setView('maintenance')}
+                  justifyContent: 'space-between',
+                  gap: '12px',
+                  flexWrap: 'wrap',
+                  animation: o.status === 'overdue' ? 'pulseRedBorder 2s ease-in-out infinite' : 'none',
+                  transition: 'transform 0.2s, box-shadow 0.2s',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = o.status === 'overdue' ? '0 4px 15px rgba(239, 68, 68, 0.25)' : '0 4px 15px rgba(245, 158, 11, 0.25)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.transform = 'none';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
               >
-                Log Oil Change
-              </button>
-            </div>
-          ))}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: '1 1 auto', minWidth: 0 }}>
+                  <div style={{
+                    width: '40px',
+                    height: '40px',
+                    borderRadius: '50%',
+                    background: o.status === 'overdue' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(245, 158, 11, 0.2)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                    flexShrink: 0
+                  }}>
+                    🛢️
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: o.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
+                      {o.status === 'overdue' ? 'OVERDUE — Oil Change!' : 'Oil Change Due Soon'}
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      {o.vehicleName} • {o.status === 'overdue'
+                        ? `Overdue by ${Math.abs(o.remainingKm)} km`
+                        : `${o.remainingKm} km remaining`
+                      } {o.timeMessage ? `• ${o.timeMessage}` : ''}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-primary"
+                  style={{ padding: '8px 14px', fontSize: '12px', whiteSpace: 'nowrap', flexShrink: 0 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (vehicleObj) onOpenOdoModal(vehicleObj);
+                  }}
+                >
+                  Update Odometer / Ganti Oli
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
 
