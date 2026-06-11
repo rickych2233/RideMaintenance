@@ -126,18 +126,65 @@ export default function App() {
       .catch(() => {});
   }, [vehicles, logs, maintenanceLogs, token]);
 
-  // Request Push Notification permission on user login/mount
+  // Request Push Notification permission and subscribe to Web Push on mount
   useEffect(() => {
-    if ('Notification' in window) {
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().then(permission => {
-          console.log('Notification permission:', permission);
-        });
-      }
-    }
-  }, [user]);
+    if ('serviceWorker' in navigator && 'PushManager' in window && user && token) {
+      const registerServiceWorker = async () => {
+        try {
+          const registration = await navigator.serviceWorker.register('/sw.js');
+          
+          let permission = Notification.permission;
+          if (permission === 'default') {
+            permission = await Notification.requestPermission();
+          }
 
-  // Trigger Push Notification when oil status is overdue or due soon
+          if (permission === 'granted') {
+            // Fetch VAPID Key from backend
+            const vapidRes = await authFetch(`${API_URL}/api/vapid-public-key`);
+            if (vapidRes.ok) {
+              const { publicKey } = await vapidRes.json();
+              
+              // Helper to convert base64 to Uint8Array for PushManager
+              const urlB64ToUint8Array = (base64String) => {
+                const padding = '='.repeat((4 - base64String.length % 4) % 4);
+                const base64 = (base64String + padding)
+                  .replace(/\-/g, '+')
+                  .replace(/_/g, '/');
+                const rawData = window.atob(base64);
+                const outputArray = new Uint8Array(rawData.length);
+                for (let i = 0; i < rawData.length; ++i) {
+                  outputArray[i] = rawData.charCodeAt(i);
+                }
+                return outputArray;
+              };
+
+              // Subscribe to PushManager
+              let subscription = await registration.pushManager.getSubscription();
+              if (!subscription) {
+                subscription = await registration.pushManager.subscribe({
+                  userVisibleOnly: true,
+                  applicationServerKey: urlB64ToUint8Array(publicKey)
+                });
+              }
+
+              // Send subscription to backend
+              await authFetch(`${API_URL}/api/subscribe`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(subscription)
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Service Worker / Push Registration Error:', error);
+        }
+      };
+
+      registerServiceWorker();
+    }
+  }, [user, token]);
+
+  // Fallback: Trigger local Push Notification when oil status is overdue (if app is open)
   useEffect(() => {
     if (!oilStatus || oilStatus.length === 0) return;
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -571,40 +618,40 @@ export default function App() {
       {/* Bottom Navigation (Mobile Viewports only) */}
       {view !== 'active_ride' && (
         <div className="bottom-nav">
-          <button className={`bottom-nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
+          <div className={`bottom-nav-item ${view === 'dashboard' ? 'active' : ''}`} onClick={() => setView('dashboard')}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 12 8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25" />
             </svg>
             <span>Home</span>
-          </button>
+          </div>
 
-          <button className={`bottom-nav-item ${view === 'vehicles' ? 'active' : ''}`} onClick={() => setView('vehicles')}>
+          <div className={`bottom-nav-item ${view === 'vehicles' ? 'active' : ''}`} onClick={() => setView('vehicles')}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 18.75a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h6m-9 0H3.375a1.125 1.125 0 0 1-1.125-1.125V14.25m17.25 4.5a1.5 1.5 0 0 1-3 0m3 0a1.5 1.5 0 0 0-3 0m3 0h1.125c.621 0 1.129-.504 1.129-1.125v-3.07M14.25 18.75H8.25m6-10.5V6a2.25 2.25 0 0 0-2.25-2.25h-1.5A2.25 2.25 0 0 0 8.25 6v2.25M3 14.25c0-1.243 1.007-2.25 2.25-2.25h13.5c1.243 0 2.25 1.007 2.25 2.25v2.25H3v-2.25Z" />
             </svg>
             <span>Garage</span>
-          </button>
+          </div>
 
-          <button className={`bottom-nav-item ${view === 'logs' ? 'active' : ''}`} onClick={() => setView('logs')}>
+          <div className={`bottom-nav-item ${view === 'logs' ? 'active' : ''}`} onClick={() => setView('logs')}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 0 0 2.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 0 0-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 0 0 .75-.75 2.25 2.25 0 0 0-.1-.664m-5.8 0A2.251 2.251 0 0 1 13.5 2.25H15c1.03 0 1.9.693 2.166 1.638m-7.377 2.24c-.407-.03-.815-.071-1.222-.121L4 5.07M4 19.5A2.25 2.25 0 0 1 1.75 17.25V6.75A2.25 2.25 0 0 1 4 4.5h1.221M4 19.5H18a2.25 2.25 0 0 0 2.25-2.25v-2.25H4v2.25Z" />
             </svg>
             <span>History</span>
-          </button>
+          </div>
 
-          <button className={`bottom-nav-item ${view === 'maintenance' ? 'active' : ''}`} onClick={() => setView('maintenance')}>
+          <div className={`bottom-nav-item ${view === 'maintenance' ? 'active' : ''}`} onClick={() => setView('maintenance')}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17 17.25 21A1.75 1.75 0 1 0 20 18.25l-5.83-5.83M11.42 15.17l-4.66-4.66m4.66 4.66 4.66-4.66m-4.66 4.66V21m0-5.83V9.17m0 0L17.25 3A1.75 1.75 0 0 0 14.5.25l-5.83 5.83m3.17 3.09-4.66-4.66m4.66 4.66-4.66 4.66M6.76 10.51 1 16.25A1.75 1.75 0 1 0 3.75 19l5.83-5.83" />
             </svg>
             <span>Service</span>
-          </button>
+          </div>
 
-          <button className="bottom-nav-item" onClick={handleLogout}>
+          <div className="bottom-nav-item" onClick={handleLogout}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
             </svg>
             <span>Logout</span>
-          </button>
+          </div>
         </div>
       )}
     </div>

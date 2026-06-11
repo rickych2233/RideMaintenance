@@ -2,12 +2,28 @@ const express = require('express');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const webpush = require('web-push');
+const cron = require('node-cron');
 const { initDb, dbQuery } = require('./db.cjs');
 const authMiddleware = require('./auth.cjs');
 
 const app = express();
 const PORT = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
+
+// Web Push Configuration
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(
+    'mailto:test@example.com',
+    VAPID_PUBLIC_KEY,
+    VAPID_PRIVATE_KEY
+  );
+} else {
+  console.warn('⚠️ VAPID keys are missing. Push notifications will not work.');
+}
 
 // Initialize Database
 initDb();
@@ -105,8 +121,36 @@ app.get('/api/auth/me', authMiddleware, async (req, res) => {
 // ─── AUTH MIDDLEWARE FOR DATA ROUTES ────────────────────────────────────
 
 app.use('/api', (req, res, next) => {
-  if (req.path.startsWith('/auth/')) return next();
+  if (req.path.startsWith('/auth/') || req.path === '/vapid-public-key') return next();
   return authMiddleware(req, res, next);
+});
+
+app.get('/api/vapid-public-key', (req, res) => {
+  res.json({ publicKey: VAPID_PUBLIC_KEY });
+});
+
+// ─── PUSH NOTIFICATION SUBSCRIPTION ─────────────────────────────────────
+
+app.post('/api/subscribe', async (req, res) => {
+  const subscription = req.body;
+  if (!subscription || !subscription.endpoint) {
+    return res.status(400).json({ error: 'Invalid subscription object' });
+  }
+
+  try {
+    const existing = await dbQuery.get('SELECT id FROM push_subscriptions WHERE endpoint = ? AND userId = ?', [subscription.endpoint, req.user.userId]);
+    
+    if (!existing) {
+      await dbQuery.run(
+        'INSERT INTO push_subscriptions (userId, endpoint, p256dh, auth) VALUES (?, ?, ?, ?)',
+        [req.user.userId, subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth]
+      );
+    }
+    res.status(201).json({ message: 'Subscription saved successfully.' });
+  } catch (err) {
+    console.error('Subscription error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ─── VEHICLES ENDPOINTS ─────────────────────────────────────────────────
@@ -396,6 +440,93 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
     });
 
     res.json(oilStatus);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── CRON JOB FOR OIL REMINDERS ──────────────────────────────────────────
+
+const runDailyCheck = async () => {
+  console.log('⏰ Running oil reminder check...');
+  try {
+    const vehicles = await dbQuery.all('SELECT * FROM vehicles ORDER BY id ASC');
+    const allLogs = await dbQuery.all("SELECT * FROM maintenance_logs WHERE serviceType = 'Oil Change' ORDER BY id DESC");
+    
+    let pushCount = 0;
+
+    for (const v of vehicles) {
+      const lastOilChange = allLogs.find(l => l.vehicleId === v.id);
+      const lastOdo = lastOilChange ? lastOilChange.odometer : 0;
+      const interval = v.oilInterval || 2000;
+      const kmSince = v.currentOdometer - lastOdo;
+      const remaining = interval - kmSince;
+
+      let status = 'ok';
+      if (!lastOilChange && v.currentOdometer > 0) status = 'overdue';
+      else if (remaining <= 0) status = 'overdue';
+      else if (remaining <= Math.round(interval * 0.2)) status = 'due_soon';
+
+      const freq = v.oilReminderFrequency || 'weekly';
+      const lastCheckStr = v.lastOilReminderDate || (lastOilChange ? lastOilChange.date : null);
+      
+      let sendTimeAlert = false;
+      let timeMessage = '';
+      if (lastCheckStr) {
+         const lastCheckDate = new Date(lastCheckStr);
+         const diffDays = Math.floor(Math.abs(new Date() - lastCheckDate) / (1000 * 60 * 60 * 24));
+         if (freq === 'daily' && diffDays >= 1) { sendTimeAlert = true; timeMessage = `Sudah ${diffDays} hari sejak cek terakhir.`; }
+         else if (freq === 'weekly' && diffDays >= 7) { sendTimeAlert = true; timeMessage = `Waktunya cek mingguan.`; }
+         else if (freq === 'monthly' && diffDays >= 30) { sendTimeAlert = true; timeMessage = `Waktunya cek bulanan.`; }
+      }
+
+      if (status !== 'ok' || sendTimeAlert) {
+         const title = status === 'overdue' ? '🛢️ Peringatan: Ganti Oli!' : '📅 Pengingat: Cek Oli Motor';
+         let body = `Motor ${v.name} perlu dicek.`;
+         
+         if (status === 'overdue') body = `Oli motor ${v.name} sudah melewati batas! Silakan ganti sekarang.`;
+         else if (status === 'due_soon') body = `Oli motor ${v.name} perlu diganti dalam ${remaining} km lagi.`;
+         else if (sendTimeAlert) body = `Pengingat ${freq} untuk ${v.name}: ${timeMessage}`;
+         
+         const subscriptions = await dbQuery.all('SELECT * FROM push_subscriptions WHERE userId = ?', [v.userId]);
+         for (const sub of subscriptions) {
+            const pushSub = {
+               endpoint: sub.endpoint,
+               keys: { p256dh: sub.p256dh, auth: sub.auth }
+            };
+            try {
+               await webpush.sendNotification(pushSub, JSON.stringify({
+                 title, 
+                 body, 
+                 icon: '/favicon.ico',
+                 url: '/'
+               }));
+               pushCount++;
+            } catch (err) {
+               if (err.statusCode === 410 || err.statusCode === 404) {
+                 await dbQuery.run('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]);
+               } else {
+                 console.error('Push error for user', v.userId, ':', err);
+               }
+            }
+         }
+      }
+    }
+    console.log(`✅ Finished check. Sent ${pushCount} push notifications.`);
+    return pushCount;
+  } catch (err) {
+    console.error('Cron job error:', err);
+    throw err;
+  }
+};
+
+cron.schedule('0 8 * * *', runDailyCheck); // Run at 8:00 AM every day
+
+// Test Endpoint to trigger cron manually
+app.get('/api/test-cron', async (req, res) => {
+  try {
+    const sent = await runDailyCheck();
+    res.json({ message: `Check completed. Sent ${sent} notifications.` });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
