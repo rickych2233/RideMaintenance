@@ -7,9 +7,20 @@ const cron = require('node-cron');
 const { initDb, dbQuery } = require('./db.cjs');
 const authMiddleware = require('./auth.cjs');
 
+const nodemailer = require('nodemailer');
+
 const app = express();
 const PORT = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-dev-secret';
+
+// Email Configuration
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
 // Web Push Configuration
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
@@ -165,7 +176,7 @@ app.get('/api/vehicles', async (req, res) => {
 });
 
 app.post('/api/vehicles', async (req, res) => {
-  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate } = req.body;
+  const { name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate, stnkExpiryDate } = req.body;
   if (!name || !brand || !model) {
     return res.status(400).json({ error: 'Name, brand, and model are required.' });
   }
@@ -178,8 +189,8 @@ app.post('/api/vehicles', async (req, res) => {
     }
 
     const result = await dbQuery.get(
-      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO vehicles (userId, name, type, brand, model, licensePlate, currentOdometer, lastServiceOdometer, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate, stnkExpiryDate)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         req.user.userId,
         name,
@@ -193,7 +204,8 @@ app.post('/api/vehicles', async (req, res) => {
         parseInt(serviceInterval || 3000),
         parseInt(oilInterval || 2000),
         oilReminderFrequency || 'weekly',
-        lastOilReminderDate || new Date().toISOString().split('T')[0]
+        lastOilReminderDate || new Date().toISOString().split('T')[0],
+        stnkExpiryDate || null
       ]
     );
     const newVehicle = await dbQuery.get('SELECT * FROM vehicles WHERE id = ?', [result.id]);
@@ -213,7 +225,7 @@ app.delete('/api/vehicles/:id', async (req, res) => {
 });
 
 app.put('/api/vehicles/:id', async (req, res) => {
-  const { name, type, brand, model, licensePlate, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate } = req.body;
+  const { name, type, brand, model, licensePlate, tankCapacity, serviceInterval, oilInterval, oilReminderFrequency, lastOilReminderDate, stnkExpiryDate } = req.body;
   const vehicleId = req.params.id;
 
   try {
@@ -224,7 +236,7 @@ app.put('/api/vehicles/:id', async (req, res) => {
 
     await dbQuery.run(
       `UPDATE vehicles 
-       SET name = ?, type = ?, brand = ?, model = ?, licensePlate = ?, tankCapacity = ?, serviceInterval = ?, oilInterval = ?, oilReminderFrequency = ?, lastOilReminderDate = ?
+       SET name = ?, type = ?, brand = ?, model = ?, licensePlate = ?, tankCapacity = ?, serviceInterval = ?, oilInterval = ?, oilReminderFrequency = ?, lastOilReminderDate = ?, stnkExpiryDate = ?
        WHERE id = ? AND userId = ?`,
       [
         name || vehicle.name,
@@ -237,6 +249,7 @@ app.put('/api/vehicles/:id', async (req, res) => {
         parseInt(oilInterval || vehicle.oilInterval || 2000),
         oilReminderFrequency || vehicle.oilReminderFrequency || 'weekly',
         lastOilReminderDate !== undefined ? lastOilReminderDate : vehicle.lastOilReminderDate,
+        stnkExpiryDate !== undefined ? stnkExpiryDate : vehicle.stnkExpiryDate,
         vehicleId,
         req.user.userId
       ]
@@ -511,6 +524,64 @@ const runDailyCheck = async () => {
             }
          }
       }
+
+      // STNK Expiry Reminder Check (7 Days Before)
+      if (v.stnkExpiryDate) {
+        const stnkDate = new Date(v.stnkExpiryDate);
+        const todayDate = new Date();
+        const diffDaysStnk = Math.ceil((stnkDate - todayDate) / (1000 * 60 * 60 * 24));
+
+        if (diffDaysStnk === 7) {
+          const stnkTitle = '📄 Peringatan: STNK Segera Mati!';
+          const stnkBody = `Pajak STNK untuk kendaraan ${v.name} akan jatuh tempo dalam 7 hari (${v.stnkExpiryDate}). Segera lakukan perpanjangan!`;
+
+          // 1. Send Push Notification
+          const subscriptions = await dbQuery.all('SELECT * FROM push_subscriptions WHERE userId = ?', [v.userId]);
+          for (const sub of subscriptions) {
+            const pushSub = {
+              endpoint: sub.endpoint,
+              keys: { p256dh: sub.p256dh, auth: sub.auth }
+            };
+            try {
+              await webpush.sendNotification(pushSub, JSON.stringify({
+                title: stnkTitle, 
+                body: stnkBody, 
+                icon: '/favicon.ico',
+                url: '/'
+              }));
+              pushCount++;
+            } catch (err) {
+              if (err.statusCode === 410 || err.statusCode === 404) {
+                await dbQuery.run('DELETE FROM push_subscriptions WHERE endpoint = ?', [sub.endpoint]);
+              }
+            }
+          }
+
+          // 2. Send Email Notification (Temporarily Disabled)
+          /*
+          try {
+             const user = await dbQuery.get('SELECT email, name FROM users WHERE id = ?', [v.userId]);
+             if (user && user.email && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+                await transporter.sendMail({
+                  from: `"RideRecord Alerts" <${process.env.EMAIL_USER}>`,
+                  to: user.email,
+                  subject: stnkTitle,
+                  text: `Halo ${user.name},\n\n${stnkBody}\n\nSalam aman berkendara,\nTim RideRecord`,
+                  html: `<div style="font-family: sans-serif; padding: 20px;">
+                           <h2>${stnkTitle}</h2>
+                           <p>Halo <b>${user.name}</b>,</p>
+                           <p>${stnkBody}</p>
+                           <br/>
+                           <p>Salam aman berkendara,<br/>Tim RideRecord</p>
+                         </div>`
+                });
+             }
+          } catch(err) {
+             console.error('Email sending error:', err);
+          }
+          */
+        }
+      }
     }
     console.log(`✅ Finished check. Sent ${pushCount} push notifications.`);
     return pushCount;
@@ -527,6 +598,51 @@ app.get('/api/test-cron', async (req, res) => {
   try {
     const sent = await runDailyCheck();
     res.json({ message: `Check completed. Sent ${sent} notifications.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── BBM PRICES (SCRAPING FRAMEWORK) ────────────────────────────────────
+
+app.get('/api/bbm-prices', async (req, res) => {
+  try {
+    const setting = await dbQuery.get("SELECT value FROM system_settings WHERE key = 'bbm_maintenance'");
+    const isMaintenance = setting && setting.value === 'true';
+
+    if (isMaintenance) {
+      return res.json({
+        status: 'maintenance',
+        message: 'Maaf, sistem sinkronisasi harga BBM sedang dalam penyesuaian (Maintenance).'
+      });
+    }
+
+    // Return dummy/cached data for now
+    res.json({
+      status: 'success',
+      data: [
+        { name: 'Pertamax', price: 12950 },
+        { name: 'Pertalite', price: 10000 },
+        { name: 'Pertamax Turbo', price: 14400 }
+      ]
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Endpoint to simulate the cron job scraping behavior
+app.post('/api/bbm-prices/test-scrape', async (req, res) => {
+  const { success } = req.body; // Pass {"success": false} to trigger maintenance
+  
+  try {
+    if (success) {
+      await dbQuery.run("UPDATE system_settings SET value = 'false' WHERE key = 'bbm_maintenance'");
+      res.json({ message: 'Scrape successful, maintenance mode OFF' });
+    } else {
+      await dbQuery.run("UPDATE system_settings SET value = 'true' WHERE key = 'bbm_maintenance'");
+      res.json({ message: 'Scrape failed, maintenance mode ON' });
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

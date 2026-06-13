@@ -184,6 +184,43 @@ export default function MaintenanceTracker({
                     </div>
                   );
                 })()}
+
+                {/* STNK Expiry Reminder */}
+                {(() => {
+                  if (!v.stnkExpiryDate) return null;
+                  const expiryDate = new Date(v.stnkExpiryDate);
+                  const today = new Date();
+                  const diffTime = expiryDate - today;
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                  
+                  if (diffDays > 30) return null; // Only show if <= 30 days
+                  
+                  const isOverdue = diffDays < 0;
+                  
+                  return (
+                    <div 
+                      style={{
+                        marginTop: '12px',
+                        padding: '10px 12px',
+                        background: isOverdue ? 'rgba(239, 68, 68, 0.08)' : 'rgba(245, 158, 11, 0.08)',
+                        border: `1px solid ${isOverdue ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                        borderRadius: 'var(--radius-sm)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: isOverdue ? 'var(--red)' : 'var(--amber)' }}>
+                          📄 STNK Pajak {isOverdue ? 'MATI / OVERDUE' : 'Jatuh Tempo Sebentar Lagi'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '12px', color: isOverdue ? 'var(--red)' : 'var(--amber)' }}>
+                        {isOverdue 
+                          ? `Lewat jatuh tempo sejak ${Math.abs(diffDays)} hari yang lalu (${v.stnkExpiryDate})` 
+                          : `Jatuh tempo dalam ${diffDays} hari (${v.stnkExpiryDate})`
+                        }
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           );

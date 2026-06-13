@@ -22,6 +22,7 @@ export default function VehicleManager({
   const [serviceInterval, setServiceInterval] = useState(3000);
   const [oilInterval, setOilInterval] = useState(2000);
   const [oilReminderFrequency, setOilReminderFrequency] = useState('weekly');
+  const [stnkExpiryDate, setStnkExpiryDate] = useState('');
 
   const openEditModal = (vehicle) => {
     setEditVehicleId(vehicle.id);
@@ -35,6 +36,7 @@ export default function VehicleManager({
     setServiceInterval(vehicle.serviceInterval);
     setOilInterval(vehicle.oilInterval || 2000);
     setOilReminderFrequency(vehicle.oilReminderFrequency || 'weekly');
+    setStnkExpiryDate(vehicle.stnkExpiryDate || '');
     setShowAddModal(true);
   };
 
@@ -50,6 +52,7 @@ export default function VehicleManager({
     setServiceInterval(3000);
     setOilInterval(2000);
     setOilReminderFrequency('weekly');
+    setStnkExpiryDate('');
     setShowAddModal(true);
   };
 
@@ -70,7 +73,8 @@ export default function VehicleManager({
         tankCapacity: parseFloat(tankCapacity || 10),
         serviceInterval: parseInt(serviceInterval || 3000),
         oilInterval: parseInt(oilInterval || 2000),
-        oilReminderFrequency
+        oilReminderFrequency,
+        stnkExpiryDate
       });
     } else {
       const newVehicle = {
@@ -85,7 +89,8 @@ export default function VehicleManager({
         tankCapacity: parseFloat(tankCapacity || 10),
         serviceInterval: parseInt(serviceInterval || 3000),
         oilInterval: parseInt(oilInterval || 2000),
-        oilReminderFrequency
+        oilReminderFrequency,
+        stnkExpiryDate
       };
       onAddVehicle(newVehicle);
     }
@@ -336,20 +341,35 @@ export default function VehicleManager({
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Oil Reminder Alert Frequency</label>
-                <select 
-                  className="form-control"
-                  value={oilReminderFrequency}
-                  onChange={(e) => setOilReminderFrequency(e.target.value)}
-                >
-                  <option value="daily">📅 Daily (Sehari sekali)</option>
-                  <option value="weekly">📅 Weekly (Seminggu sekali)</option>
-                  <option value="monthly">📅 Monthly (Sebulan sekali)</option>
-                </select>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                  Choose how often you want to be reminded when oil replacement is due.
-                </span>
+              <div className="form-row">
+                <div className="form-group">
+                  <label className="form-label">Oil Reminder Alert Frequency</label>
+                  <select 
+                    className="form-control"
+                    value={oilReminderFrequency}
+                    onChange={(e) => setOilReminderFrequency(e.target.value)}
+                  >
+                    <option value="daily">📅 Daily (Sehari sekali)</option>
+                    <option value="weekly">📅 Weekly (Seminggu sekali)</option>
+                    <option value="monthly">📅 Monthly (Sebulan sekali)</option>
+                  </select>
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Choose how often you want to be reminded when oil replacement is due.
+                  </span>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Tanggal Jatuh Tempo STNK</label>
+                  <input 
+                    type="date" 
+                    className="form-control" 
+                    value={stnkExpiryDate}
+                    onChange={(e) => setStnkExpiryDate(e.target.value)}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                    Hanya untuk pengingat masa berlaku STNK tahunan.
+                  </span>
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '24px' }}>

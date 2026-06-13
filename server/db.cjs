@@ -54,6 +54,7 @@ function camelCaseKeys(obj) {
     else if (key === 'oilinterval') newKey = 'oilInterval';
     else if (key === 'oilreminderfrequency') newKey = 'oilReminderFrequency';
     else if (key === 'lastoilreminderdate') newKey = 'lastOilReminderDate';
+    else if (key === 'stnkexpirydate') newKey = 'stnkExpiryDate';
 
     result[newKey] = camelCaseKeys(obj[key]);
   }
@@ -139,7 +140,8 @@ function initDb() {
         serviceInterval INTEGER NOT NULL DEFAULT 3000,
         oilInterval INTEGER NOT NULL DEFAULT 2000,
         oilReminderFrequency VARCHAR(50) NOT NULL DEFAULT 'weekly',
-        lastOilReminderDate VARCHAR(50)
+        lastOilReminderDate VARCHAR(50),
+        stnkExpiryDate VARCHAR(50)
       )`
     : `CREATE TABLE IF NOT EXISTS vehicles (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -155,7 +157,8 @@ function initDb() {
         serviceInterval INTEGER NOT NULL DEFAULT 3000,
         oilInterval INTEGER NOT NULL DEFAULT 2000,
         oilReminderFrequency TEXT NOT NULL DEFAULT 'weekly',
-        lastOilReminderDate TEXT
+        lastOilReminderDate TEXT,
+        stnkExpiryDate TEXT
       )`;
 
   const rideLogsSchema = isPg
@@ -229,6 +232,16 @@ function initDb() {
         auth TEXT NOT NULL
       )`;
 
+  const systemSettingsSchema = isPg
+    ? `CREATE TABLE IF NOT EXISTS system_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL
+      )`
+    : `CREATE TABLE IF NOT EXISTS system_settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      )`;
+
   const runInit = async () => {
     try {
       await dbQuery.run(userSchema);
@@ -236,6 +249,17 @@ function initDb() {
       await dbQuery.run(rideLogsSchema);
       await dbQuery.run(maintenanceLogsSchema);
       await dbQuery.run(pushSubscriptionsSchema);
+      await dbQuery.run(systemSettingsSchema);
+      
+      // Initialize default settings
+      try {
+        const existing = await dbQuery.get("SELECT key FROM system_settings WHERE key = 'bbm_maintenance'");
+        if (!existing) {
+          await dbQuery.run("INSERT INTO system_settings (key, value) VALUES ('bbm_maintenance', 'false')");
+        }
+      } catch (err) {
+        console.log('Error inserting default setting:', err.message);
+      }
       
       // Auto-migrate column if not exists
       try {
@@ -252,6 +276,12 @@ function initDb() {
 
       try {
         await dbQuery.run("ALTER TABLE vehicles ADD COLUMN lastOilReminderDate VARCHAR(50);");
+      } catch (err) {
+        // Ignore if exists
+      }
+
+      try {
+        await dbQuery.run("ALTER TABLE vehicles ADD COLUMN stnkExpiryDate VARCHAR(50);");
       } catch (err) {
         // Ignore if exists
       }
