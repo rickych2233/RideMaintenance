@@ -110,6 +110,7 @@ app.post('/api/auth/login', async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      role: user.role,
       token
     });
   } catch (err) {
@@ -119,7 +120,7 @@ app.post('/api/auth/login', async (req, res) => {
 
 app.get('/api/auth/me', authMiddleware, async (req, res) => {
   try {
-    const user = await dbQuery.get('SELECT id, name, email, createdAt FROM users WHERE id = ?', [req.user.userId]);
+    const user = await dbQuery.get('SELECT id, name, email, role, createdAt FROM users WHERE id = ?', [req.user.userId]);
     if (!user) {
       return res.status(404).json({ error: 'User not found.' });
     }
@@ -598,6 +599,87 @@ app.get('/api/test-cron', async (req, res) => {
   try {
     const sent = await runDailyCheck();
     res.json({ message: `Check completed. Sent ${sent} notifications.` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── ADMIN ROUTES ────────────────────────────────────────────────────────
+
+const adminMiddleware = async (req, res, next) => {
+  try {
+    const user = await dbQuery.get('SELECT email, role FROM users WHERE id = ?', [req.user.userId]);
+    if (user && (user.role === 'admin' || user.email === 'rickychristian2309@gmail.com')) {
+      next();
+    } else {
+      res.status(403).json({ error: 'Access denied. Admins only.' });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+};
+
+app.get('/api/admin/users', adminMiddleware, async (req, res) => {
+  try {
+    const users = await dbQuery.all('SELECT id, name, email, role, createdAt FROM users ORDER BY id DESC');
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/users/:id', adminMiddleware, async (req, res) => {
+  try {
+    // Delete associated data first
+    await dbQuery.run('DELETE FROM maintenance_logs WHERE userId = ?', [req.params.id]);
+    await dbQuery.run('DELETE FROM ride_logs WHERE userId = ?', [req.params.id]);
+    await dbQuery.run('DELETE FROM push_subscriptions WHERE userId = ?', [req.params.id]);
+    await dbQuery.run('DELETE FROM vehicles WHERE userId = ?', [req.params.id]);
+    // Delete user
+    await dbQuery.run('DELETE FROM users WHERE id = ?', [req.params.id]);
+    res.json({ message: 'User deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/admin/users/:id/role', adminMiddleware, async (req, res) => {
+  try {
+    const { role } = req.body;
+    if (role !== 'admin' && role !== 'user') {
+      return res.status(400).json({ error: 'Invalid role specified.' });
+    }
+    
+    // Prevent the main super admin from demoting themselves
+    const userToUpdate = await dbQuery.get('SELECT email FROM users WHERE id = ?', [req.params.id]);
+    if (userToUpdate && userToUpdate.email === 'rickychristian2309@gmail.com' && role === 'user') {
+      return res.status(403).json({ error: 'Cannot demote the main system admin.' });
+    }
+
+    await dbQuery.run('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
+    res.json({ message: 'User role updated successfully', role });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/vehicles', adminMiddleware, async (req, res) => {
+  try {
+    const { isPg } = require('./db.cjs');
+    const sql = isPg 
+      ? `SELECT v.*, u.name as "ownerName", u.email as "ownerEmail" FROM vehicles v JOIN users u ON v."userId" = u.id ORDER BY v.id DESC`
+      : `SELECT v.*, u.name as ownerName, u.email as ownerEmail FROM vehicles v JOIN users u ON v.userId = u.id ORDER BY v.id DESC`;
+    const vehicles = await dbQuery.all(sql);
+    res.json(vehicles);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/admin/vehicles/:id', adminMiddleware, async (req, res) => {
+  try {
+    await dbQuery.run('DELETE FROM vehicles WHERE id = ?', [req.params.id]);
+    res.json({ message: 'Vehicle deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

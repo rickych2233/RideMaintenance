@@ -7,6 +7,7 @@ import RideLogs from './components/RideLogs';
 import MaintenanceTracker from './components/MaintenanceTracker';
 import Login from './components/Login';
 import OdometerUpdateModal from './components/OdometerUpdateModal';
+import AdminDashboard from './components/AdminDashboard';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -504,6 +505,11 @@ export default function App() {
             <button className={`nav-item ${view === 'maintenance' ? 'active' : ''}`} onClick={() => setView('maintenance')}>
               Maintenance
             </button>
+            {(user?.role === 'admin' || user?.email === 'rickychristian2309@gmail.com') && (
+              <button className={`nav-item ${view === 'admin' ? 'active' : ''}`} onClick={() => setView('admin')} style={{ color: 'var(--cyan)' }}>
+                Admin
+              </button>
+            )}
             <button className="nav-item" onClick={handleLogout} style={{ color: 'var(--text-muted)', marginLeft: '8px' }}>
               Logout
             </button>
@@ -604,6 +610,9 @@ export default function App() {
             token={token}
           />
         )}
+        {view === 'admin' && (user?.role === 'admin' || user?.email === 'rickychristian2309@gmail.com') && (
+          <AdminDashboard API_URL={API_URL} token={token} />
+        )}
       </main>
 
       {odoUpdateVehicle && (
@@ -645,6 +654,15 @@ export default function App() {
             </svg>
             <span>Service</span>
           </div>
+
+          {(user?.role === 'admin' || user?.email === 'rickychristian2309@gmail.com') && (
+            <div className={`bottom-nav-item ${view === 'admin' ? 'active' : ''}`} onClick={() => setView('admin')} style={{ color: 'var(--cyan)' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+              <span>Admin</span>
+            </div>
+          )}
 
           <div className="bottom-nav-item" onClick={handleLogout}>
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth="2" stroke="currentColor">

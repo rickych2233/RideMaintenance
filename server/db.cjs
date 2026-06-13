@@ -115,6 +115,7 @@ function initDb() {
         email VARCHAR(255) UNIQUE NOT NULL,
         password VARCHAR(255) NOT NULL,
         name VARCHAR(100) NOT NULL,
+        role VARCHAR(50) DEFAULT 'user',
         createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`
     : `CREATE TABLE IF NOT EXISTS users (
@@ -122,6 +123,7 @@ function initDb() {
         email TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         name TEXT NOT NULL,
+        role TEXT DEFAULT 'user',
         createdAt TEXT DEFAULT (datetime('now'))
       )`;
 
@@ -282,6 +284,12 @@ function initDb() {
 
       try {
         await dbQuery.run("ALTER TABLE vehicles ADD COLUMN stnkExpiryDate VARCHAR(50);");
+      } catch (err) {
+        // Ignore if exists
+      }
+
+      try {
+        await dbQuery.run("ALTER TABLE users ADD COLUMN role VARCHAR(50) DEFAULT 'user';");
       } catch (err) {
         // Ignore if exists
       }
