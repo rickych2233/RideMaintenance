@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
+import NearbyWorkshops from './NearbyWorkshops';
 export default function MaintenanceTracker({
   vehicles,
   maintenanceLogs,
@@ -194,6 +194,11 @@ export default function MaintenanceTracker({
             <p style={{ color: 'var(--text-muted)' }}>No vehicles in the garage to track. Please add a vehicle first.</p>
           </div>
         )}
+      </div>
+      
+      {/* Nearby Workshops Map */}
+      <div style={{ marginBottom: '32px' }}>
+        <NearbyWorkshops />
       </div>
 
       {/* Maintenance Logs Table */}
