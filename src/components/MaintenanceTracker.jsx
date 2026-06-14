@@ -138,8 +138,42 @@ export default function MaintenanceTracker({
                 {/* Oil Change Reminder */}
                 {(() => {
                   const oil = oilStatus.find(o => o.vehicleId === v.id);
-                  if (!oil || oil.status === 'ok') return null;
+                  if (!oil) return null;
                   const oilPercent = Math.min(100, Math.max(0, (oil.kmSince / oil.interval) * 100));
+                  
+                  const bgColors = {
+                    overdue: 'rgba(239, 68, 68, 0.08)',
+                    due_soon: 'rgba(245, 158, 11, 0.08)',
+                    ok: 'rgba(16, 185, 129, 0.08)'
+                  };
+                  const borderColors = {
+                    overdue: 'rgba(239, 68, 68, 0.3)',
+                    due_soon: 'rgba(245, 158, 11, 0.3)',
+                    ok: 'rgba(16, 185, 129, 0.3)'
+                  };
+                  const hoverBorderColors = {
+                    overdue: 'rgba(239, 68, 68, 0.6)',
+                    due_soon: 'rgba(245, 158, 11, 0.6)',
+                    ok: 'rgba(16, 185, 129, 0.6)'
+                  };
+                  const textColors = {
+                    overdue: 'var(--red)',
+                    due_soon: 'var(--amber)',
+                    ok: 'var(--emerald)'
+                  };
+                  const statusLabels = {
+                    overdue: 'OVERDUE',
+                    due_soon: 'Due Soon',
+                    ok: 'OK'
+                  };
+                  const progressClasses = {
+                    overdue: 'danger',
+                    due_soon: 'warn',
+                    ok: 'pass'
+                  };
+
+                  const currentStatus = oil.status || 'ok';
+
                   return (
                     <div 
                       onClick={() => onOpenOdoModal(v)}
@@ -147,25 +181,23 @@ export default function MaintenanceTracker({
                         cursor: 'pointer',
                         marginTop: '12px',
                         padding: '10px 12px',
-                        background: oil.status === 'overdue'
-                          ? 'rgba(239, 68, 68, 0.08)'
-                          : 'rgba(245, 158, 11, 0.08)',
-                        border: `1px solid ${oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                        background: bgColors[currentStatus] || bgColors.ok,
+                        border: `1px solid ${borderColors[currentStatus] || borderColors.ok}`,
                         borderRadius: 'var(--radius-sm)',
                         transition: 'transform 0.15s, border-color 0.15s'
                       }}
                       onMouseOver={(e) => {
                         e.currentTarget.style.transform = 'translateY(-1px)';
-                        e.currentTarget.style.borderColor = oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.6)' : 'rgba(245, 158, 11, 0.6)';
+                        e.currentTarget.style.borderColor = hoverBorderColors[currentStatus] || hoverBorderColors.ok;
                       }}
                       onMouseOut={(e) => {
                         e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.borderColor = oil.status === 'overdue' ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)';
+                        e.currentTarget.style.borderColor = borderColors[currentStatus] || borderColors.ok;
                       }}
                     >
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap', gap: '4px' }}>
-                        <span style={{ fontSize: '13px', fontWeight: 600, color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)' }}>
-                          🛢️ Oil Change {oil.status === 'overdue' ? 'OVERDUE' : 'Due Soon'} (Klik untuk update)
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: textColors[currentStatus] || textColors.ok }}>
+                          🛢️ Oil Change: {statusLabels[currentStatus] || 'OK'} (Klik untuk update)
                         </span>
                         <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
                           {oil.lastOilChangeDate ? `Last: ${oil.lastOilChangeDate}` : 'No oil change logged'}
@@ -173,11 +205,11 @@ export default function MaintenanceTracker({
                       </div>
                       <div className="maintenance-progress-bar">
                         <div
-                          className={`maintenance-progress-fill ${oil.status === 'overdue' ? 'danger' : 'warn'}`}
+                          className={`maintenance-progress-fill ${progressClasses[currentStatus] || 'pass'}`}
                           style={{ width: `${oilPercent}%` }}
                         />
                       </div>
-                      <div style={{ fontSize: '11px', marginTop: '4px', color: oil.status === 'overdue' ? 'var(--red)' : 'var(--amber)', display: 'flex', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: '11px', marginTop: '4px', color: textColors[currentStatus] || textColors.ok, display: 'flex', justifyContent: 'space-between' }}>
                         <span>{oil.timeMessage ? oil.timeMessage : ''}</span>
                         <span>{oil.remainingKm > 0 ? `${oil.remainingKm} km to next oil` : `Overdue by ${Math.abs(oil.remainingKm)} km!`}</span>
                       </div>

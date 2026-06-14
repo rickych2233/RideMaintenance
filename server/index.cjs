@@ -447,7 +447,7 @@ app.get('/api/maintenance/oil-status', async (req, res) => {
         lastOilReminderDate: v.lastOilReminderDate,
         kmSince,
         interval,
-        remainingKm: Math.max(0, remaining),
+        remainingKm: remaining,
         status,
         timeMessage
       };

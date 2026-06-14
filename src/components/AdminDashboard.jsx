@@ -85,11 +85,26 @@ export default function AdminDashboard({ API_URL, token }) {
     }
   };
 
+  const handleTestCron = async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/test-cron`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      alert(data.message || data.error);
+    } catch (err) {
+      alert('Error: ' + err.message);
+    }
+  };
+
   if (loading) return <div style={{ padding: '20px', textAlign: 'center' }}>Loading Admin Panel...</div>;
 
   return (
     <div className="glass-panel" style={{ padding: '20px' }}>
-      <h2 style={{ marginBottom: '20px', color: 'var(--cyan)' }}>🛡️ Admin Panel</h2>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h2 style={{ margin: 0, color: 'var(--cyan)' }}>🛡️ Admin Panel</h2>
+        <button onClick={handleTestCron} className="btn btn-secondary" style={{ padding: '8px 12px', fontSize: '13px' }}>
+          ⏱️ Test Background Cron
+        </button>
+      </div>
       
       <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px' }}>
         <button 
