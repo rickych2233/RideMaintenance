@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Tesseract from 'tesseract.js';
 
 export default function OdometerUpdateModal({
   vehicle,
@@ -37,55 +38,58 @@ export default function OdometerUpdateModal({
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     setPreviewUrl(URL.createObjectURL(selectedFile));
     setScanResultReady(false);
-    startScanning(selectedFile.name);
+    startScanning(selectedFile);
   };
 
-  const startScanning = (fileName) => {
+  const startScanning = (selectedFile) => {
     setScanning(true);
     setScanProgress(0);
-    setScanStep('Membaca gambar...');
+    setScanStep('Menyiapkan OCR engine...');
     
-    // Simulate OCR steps
-    const interval = setInterval(() => {
-      setScanProgress(prev => {
-        const next = prev + 5;
-        if (next >= 100) {
-          clearInterval(interval);
-          setScanning(false);
-          setScanResultReady(true);
-          
-          // Parse odometer from filename if it contains numbers
-          const numMatch = fileName.match(/\d+/g);
-          let detectedOdo = 0;
-          if (numMatch && numMatch.length > 0) {
-            // Take the longest number sequence, or last one
-            const parsed = parseInt(numMatch.sort((a,b) => b.length - a.length)[0]);
-            if (parsed > vehicle.currentOdometer) {
-              detectedOdo = parsed;
-            }
+    Tesseract.recognize(
+      selectedFile,
+      'eng',
+      {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setScanProgress(Math.floor(m.progress * 100));
+            setScanStep('Mengekstrak teks dengan OCR...');
+          } else if (m.status === 'loading tesseract core') {
+            setScanStep('Memuat engine OCR...');
+          } else if (m.status === 'initializing tesseract') {
+            setScanStep('Inisialisasi OCR...');
           }
-          
-          // Fallback: Add a realistic distance
-          if (detectedOdo <= vehicle.currentOdometer) {
-            detectedOdo = vehicle.currentOdometer + Math.floor(Math.random() * 250) + 75;
-          }
-          
-          setOdometerValue(detectedOdo);
-          return 100;
         }
-        
-        // Update steps dynamically based on progress
-        if (next === 30) {
-          setScanStep('Mendeteksi panel angka odometer...');
-        } else if (next === 65) {
-          setScanStep('Mengekstrak teks dengan OCR...');
-        } else if (next === 85) {
-          setScanStep('Memverifikasi digit angka...');
+      }
+    ).then(({ data: { text } }) => {
+      setScanning(false);
+      setScanResultReady(true);
+      
+      console.log('OCR Result text:', text);
+
+      // Parse odometer from recognized text
+      const numMatch = text.match(/\d+/g);
+      let detectedOdo = 0;
+      if (numMatch && numMatch.length > 0) {
+        // Sort by length to find the most probable odometer reading (longest string of digits)
+        const parsed = parseInt(numMatch.sort((a,b) => b.length - a.length)[0]);
+        if (parsed > vehicle.currentOdometer) {
+          detectedOdo = parsed;
         }
-        
-        return next;
-      });
-    }, 150);
+      }
+      
+      if (detectedOdo <= vehicle.currentOdometer) {
+        // Fallback to current odometer if nothing valid was found
+        detectedOdo = vehicle.currentOdometer;
+        alert('OCR tidak dapat menemukan angka kilometer yang valid atau angka lebih kecil dari odometer saat ini. Silakan cek foto atau input manual.');
+      }
+      
+      setOdometerValue(detectedOdo);
+    }).catch(err => {
+      console.error('OCR Error:', err);
+      setScanning(false);
+      alert('Terjadi kesalahan saat memproses gambar dengan OCR.');
+    });
   };
 
   const handleSubmit = (e) => {
@@ -347,14 +351,17 @@ export default function OdometerUpdateModal({
             paddingTop: '16px',
             marginBottom: '20px'
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => setLogAsOilChange(!logAsOilChange)}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }} onClick={() => setLogAsOilChange(!logAsOilChange)}>
               <input 
                 type="checkbox" 
                 checked={logAsOilChange} 
                 onChange={() => {}} // Controlled by parent div click
-                style={{ width: '18px', height: '18px', accentColor: 'var(--cyan)' }}
+                style={{ width: '18px', height: '18px', accentColor: 'var(--cyan)', marginTop: '2px' }}
               />
-              <span style={{ fontSize: '13px', fontWeight: '600' }}>Catat sebagai penggantian oli baru</span>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: '13px', fontWeight: '600' }}>Catat sebagai penggantian oli baru</span>
+                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Jika dicentang, maka akan diingat sebagai oli baru</span>
+              </div>
             </div>
 
             {logAsOilChange && (
