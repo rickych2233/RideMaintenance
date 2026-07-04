@@ -18,7 +18,7 @@ export default function OdometerUpdateModal({
   const [scanStep, setScanStep] = useState('');
   const [scanProgress, setScanProgress] = useState(0);
   const [scanResultReady, setScanResultReady] = useState(false);
-  
+
   const fileInputRef = useRef(null);
 
   // Clean up object URL on unmount
@@ -36,7 +36,8 @@ export default function OdometerUpdateModal({
 
     setFile(selectedFile);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
-    setPreviewUrl(URL.createObjectURL(selectedFile));
+    const url = URL.createObjectURL(selectedFile);
+    setPreviewUrl(url);
     setScanResultReady(false);
     startScanning(selectedFile);
   };
@@ -45,7 +46,7 @@ export default function OdometerUpdateModal({
     setScanning(true);
     setScanProgress(0);
     setScanStep('Menyiapkan OCR engine...');
-    
+
     Tesseract.recognize(
       selectedFile,
       'eng',
@@ -64,7 +65,7 @@ export default function OdometerUpdateModal({
     ).then(({ data: { text } }) => {
       setScanning(false);
       setScanResultReady(true);
-      
+
       console.log('OCR Result text:', text);
 
       // Parse odometer from recognized text
@@ -72,18 +73,18 @@ export default function OdometerUpdateModal({
       let detectedOdo = 0;
       if (numMatch && numMatch.length > 0) {
         // Sort by length to find the most probable odometer reading (longest string of digits)
-        const parsed = parseInt(numMatch.sort((a,b) => b.length - a.length)[0]);
+        const parsed = parseInt(numMatch.sort((a, b) => b.length - a.length)[0]);
         if (parsed > vehicle.currentOdometer) {
           detectedOdo = parsed;
         }
       }
-      
+
       if (detectedOdo <= vehicle.currentOdometer) {
         // Fallback to current odometer if nothing valid was found
         detectedOdo = vehicle.currentOdometer;
         alert('OCR tidak dapat menemukan angka kilometer yang valid atau angka lebih kecil dari odometer saat ini. Silakan cek foto atau input manual.');
       }
-      
+
       setOdometerValue(detectedOdo);
     }).catch(err => {
       console.error('OCR Error:', err);
@@ -95,7 +96,7 @@ export default function OdometerUpdateModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     const nextOdo = parseInt(odometerValue);
-    
+
     if (isNaN(nextOdo) || nextOdo < vehicle.currentOdometer) {
       alert(`Nilai odometer harus lebih besar atau sama dengan odometer saat ini (${vehicle.currentOdometer} km).`);
       return;
@@ -123,7 +124,7 @@ export default function OdometerUpdateModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content glass-panel" style={{ maxWidth: '480px' }} onClick={(e) => e.stopPropagation()}>
-        
+
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
           <div>
@@ -132,9 +133,9 @@ export default function OdometerUpdateModal({
               {vehicle.name} ({vehicle.brand} {vehicle.model})
             </span>
           </div>
-          <button 
-            type="button" 
-            onClick={onClose} 
+          <button
+            type="button"
+            onClick={onClose}
             style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '20px', cursor: 'pointer' }}
           >
             &times;
@@ -199,20 +200,20 @@ export default function OdometerUpdateModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          
+
           {/* Tab 1: Upload Odometer Photo (Simulated OCR) */}
           {activeTab === 'photo' && (
             <div style={{ marginBottom: '16px' }}>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                accept="image/*" 
-                onChange={handleFileChange} 
-                style={{ display: 'none' }} 
+              <input
+                type="file"
+                ref={fileInputRef}
+                accept="image/*"
+                onChange={handleFileChange}
+                style={{ display: 'none' }}
               />
-              
+
               {!previewUrl ? (
-                <div 
+                <div
                   onClick={() => fileInputRef.current.click()}
                   style={{
                     border: '2px dashed rgba(255, 255, 255, 0.15)',
@@ -232,12 +233,12 @@ export default function OdometerUpdateModal({
                 </div>
               ) : (
                 <div style={{ position: 'relative', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-color)', background: '#000' }}>
-                  <img 
-                    src={previewUrl} 
-                    alt="Odometer Preview" 
-                    style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block', opacity: scanning ? 0.6 : 1 }} 
+                  <img
+                    src={previewUrl}
+                    alt="Odometer Preview"
+                    style={{ width: '100%', maxHeight: '200px', objectFit: 'contain', display: 'block', opacity: scanning ? 0.6 : 1 }}
                   />
-                  
+
                   {/* Scanner overlay effect */}
                   {scanning && (
                     <>
@@ -306,7 +307,7 @@ export default function OdometerUpdateModal({
                   </span>
                   <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                     <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Nilai Kilometer:</span>
-                    <input 
+                    <input
                       type="number"
                       className="form-control"
                       style={{ width: '120px', padding: '6px', fontSize: '16px', fontWeight: 'bold', textAlign: 'center', color: 'var(--cyan)' }}
@@ -328,8 +329,8 @@ export default function OdometerUpdateModal({
             <div className="form-group" style={{ marginBottom: '16px' }}>
               <label className="form-label">Masukkan Kilometer Saat Ini (Odometer)</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <input 
-                  type="number" 
+                <input
+                  type="number"
                   className="form-control"
                   style={{ fontSize: '18px', fontWeight: 'bold' }}
                   placeholder="Contoh: 14250"
@@ -352,10 +353,10 @@ export default function OdometerUpdateModal({
             marginBottom: '20px'
           }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', cursor: 'pointer' }} onClick={() => setLogAsOilChange(!logAsOilChange)}>
-              <input 
-                type="checkbox" 
-                checked={logAsOilChange} 
-                onChange={() => {}} // Controlled by parent div click
+              <input
+                type="checkbox"
+                checked={logAsOilChange}
+                onChange={() => { }} // Controlled by parent div click
                 style={{ width: '18px', height: '18px', accentColor: 'var(--cyan)', marginTop: '2px' }}
               />
               <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -368,8 +369,8 @@ export default function OdometerUpdateModal({
               <div style={{ marginTop: '12px', paddingLeft: '26px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '12px' }}>Biaya Ganti Oli (IDR) - Opsional</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     className="form-control"
                     style={{ padding: '8px' }}
                     placeholder="Contoh: 65000"
@@ -379,8 +380,8 @@ export default function OdometerUpdateModal({
                 </div>
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label className="form-label" style={{ fontSize: '12px' }}>Catatan / Brand Oli</label>
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     className="form-control"
                     style={{ padding: '8px' }}
                     value={oilNotes}
@@ -396,8 +397,8 @@ export default function OdometerUpdateModal({
             <button type="button" className="btn btn-secondary" onClick={onClose}>
               Batal
             </button>
-            <button 
-              type="submit" 
+            <button
+              type="submit"
               className="btn btn-primary"
               disabled={activeTab === 'photo' && !scanResultReady && !scanning}
               style={{ opacity: (activeTab === 'photo' && !scanResultReady && !scanning) ? 0.6 : 1 }}
@@ -408,7 +409,7 @@ export default function OdometerUpdateModal({
 
         </form>
       </div>
-      
+
       {/* Styles for simulated scan line animation */}
       <style>{`
         @keyframes scanEffect {

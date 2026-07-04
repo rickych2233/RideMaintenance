@@ -27,4 +27,10 @@ dist-ssr
 database.sqlite
 .env
 
+# AI and Agent Tools State
+.claude/
+.claude-flow/
+.swarm/
+artifacts/
+ruvector.db
 
