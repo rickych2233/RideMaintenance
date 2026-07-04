@@ -71,8 +71,8 @@ export default function VehicleManager({
         model,
         licensePlate,
         tankCapacity: parseFloat(tankCapacity || 10),
-        serviceInterval: parseInt(serviceInterval || 3000),
-        oilInterval: parseInt(oilInterval || 2000),
+        serviceInterval: parseInt(serviceInterval || 3000, 10),
+        oilInterval: parseInt(oilInterval || 2000, 10),
         oilReminderFrequency,
         stnkExpiryDate
       });
@@ -84,11 +84,11 @@ export default function VehicleManager({
         brand,
         model,
         licensePlate,
-        currentOdometer: parseInt(odometer || 0),
-        lastServiceOdometer: parseInt(odometer || 0),
+        currentOdometer: parseInt(odometer || 0, 10),
+        lastServiceOdometer: parseInt(odometer || 0, 10),
         tankCapacity: parseFloat(tankCapacity || 10),
-        serviceInterval: parseInt(serviceInterval || 3000),
-        oilInterval: parseInt(oilInterval || 2000),
+        serviceInterval: parseInt(serviceInterval || 3000, 10),
+        oilInterval: parseInt(oilInterval || 2000, 10),
         oilReminderFrequency,
         stnkExpiryDate
       };

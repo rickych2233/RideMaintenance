@@ -8,7 +8,7 @@ export default function OdometerUpdateModal({
   onLogOilChange
 }) {
   const [activeTab, setActiveTab] = useState('photo'); // 'photo' or 'manual'
-  const [odometerValue, setOdometerValue] = useState(vehicle ? vehicle.currentOdometer : 0);
+  const [odometerValue, setOdometerValue] = useState(vehicle?.currentOdometer ?? '');
   const [logAsOilChange, setLogAsOilChange] = useState(true);
   const [oilCost, setOilCost] = useState('');
   const [oilNotes, setOilNotes] = useState('Ganti oli mesin (OCR/Manual input update)');
@@ -18,6 +18,7 @@ export default function OdometerUpdateModal({
   const [scanStep, setScanStep] = useState('');
   const [scanProgress, setScanProgress] = useState(0);
   const [scanResultReady, setScanResultReady] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -66,14 +67,12 @@ export default function OdometerUpdateModal({
       setScanning(false);
       setScanResultReady(true);
 
-      console.log('OCR Result text:', text);
-
       // Parse odometer from recognized text
       const numMatch = text.match(/\d+/g);
       let detectedOdo = 0;
       if (numMatch && numMatch.length > 0) {
         // Sort by length to find the most probable odometer reading (longest string of digits)
-        const parsed = parseInt(numMatch.sort((a, b) => b.length - a.length)[0]);
+        const parsed = parseInt(numMatch.sort((a, b) => b.length - a.length)[0], 10);
         if (parsed > vehicle.currentOdometer) {
           detectedOdo = parsed;
         }
@@ -83,6 +82,7 @@ export default function OdometerUpdateModal({
         // Fallback to current odometer if nothing valid was found
         detectedOdo = vehicle.currentOdometer;
         alert('OCR tidak dapat menemukan angka kilometer yang valid atau angka lebih kecil dari odometer saat ini. Silakan cek foto atau input manual.');
+        setActiveTab('manual');
       }
 
       setOdometerValue(detectedOdo);
@@ -90,35 +90,41 @@ export default function OdometerUpdateModal({
       console.error('OCR Error:', err);
       setScanning(false);
       alert('Terjadi kesalahan saat memproses gambar dengan OCR.');
+      setActiveTab('manual');
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const nextOdo = parseInt(odometerValue);
+    const nextOdo = parseInt(odometerValue, 10);
 
     if (isNaN(nextOdo) || nextOdo < vehicle.currentOdometer) {
       alert(`Nilai odometer harus lebih besar atau sama dengan odometer saat ini (${vehicle.currentOdometer} km).`);
       return;
     }
 
-    // Call parent to update the odometer
-    onUpdateOdometer(vehicle.id, nextOdo);
+    setSubmitting(true);
+    try {
+      // Must finish before the oil-change reset below — both hit
+      // /api/vehicles/:id/odo (read-modify-write) and would race if fired in parallel.
+      await onUpdateOdometer(vehicle.id, nextOdo);
 
-    // Optionally log as oil change
-    if (logAsOilChange) {
-      onLogOilChange({
-        vehicleId: vehicle.id,
-        vehicleName: vehicle.name,
-        serviceType: 'Oil Change',
-        date: new Date().toISOString().split('T')[0],
-        odometer: nextOdo,
-        cost: parseFloat(oilCost || 0),
-        notes: oilNotes
-      }, nextOdo); // Pass odo to reset lastServiceOdometer as well
+      if (logAsOilChange) {
+        await onLogOilChange({
+          vehicleId: vehicle.id,
+          vehicleName: vehicle.name,
+          serviceType: 'Oil Change',
+          date: new Date().toISOString().split('T')[0],
+          odometer: nextOdo,
+          cost: parseFloat(oilCost || 0),
+          notes: oilNotes
+        }, nextOdo);
+      }
+
+      onClose();
+    } finally {
+      setSubmitting(false);
     }
-
-    onClose();
   };
 
   return (
@@ -394,16 +400,16 @@ export default function OdometerUpdateModal({
 
           {/* Form Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={submitting}>
               Batal
             </button>
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={activeTab === 'photo' && !scanResultReady && !scanning}
-              style={{ opacity: (activeTab === 'photo' && !scanResultReady && !scanning) ? 0.6 : 1 }}
+              disabled={submitting || (activeTab === 'photo' && (!scanResultReady || scanning))}
+              style={{ opacity: (submitting || (activeTab === 'photo' && (!scanResultReady || scanning))) ? 0.6 : 1 }}
             >
-              Simpan Data
+              {submitting ? 'Menyimpan...' : 'Simpan Data'}
             </button>
           </div>
 

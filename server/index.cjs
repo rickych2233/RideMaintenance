@@ -185,7 +185,7 @@ app.post('/api/vehicles', async (req, res) => {
   try {
     // Enforce max 3 vehicles per user
     const countResult = await dbQuery.get('SELECT COUNT(*) as count FROM vehicles WHERE userId = ?', [req.user.userId]);
-    if (parseInt(countResult.count) >= 3) {
+    if (parseInt(countResult.count, 10) >= 3) {
       return res.status(400).json({ error: 'Maximum of 3 vehicles allowed per user.' });
     }
 
@@ -199,11 +199,11 @@ app.post('/api/vehicles', async (req, res) => {
         brand,
         model,
         licensePlate || '',
-        parseInt(currentOdometer || 0),
-        parseInt(lastServiceOdometer || currentOdometer || 0),
+        parseInt(currentOdometer || 0, 10),
+        parseInt(lastServiceOdometer || currentOdometer || 0, 10),
         parseFloat(tankCapacity || 10),
-        parseInt(serviceInterval || 3000),
-        parseInt(oilInterval || 2000),
+        parseInt(serviceInterval || 3000, 10),
+        parseInt(oilInterval || 2000, 10),
         oilReminderFrequency || 'weekly',
         lastOilReminderDate || new Date().toISOString().split('T')[0],
         stnkExpiryDate || null
@@ -246,8 +246,8 @@ app.put('/api/vehicles/:id', async (req, res) => {
         model || vehicle.model,
         licensePlate !== undefined ? licensePlate : vehicle.licensePlate,
         parseFloat(tankCapacity || vehicle.tankCapacity),
-        parseInt(serviceInterval || vehicle.serviceInterval),
-        parseInt(oilInterval || vehicle.oilInterval || 2000),
+        parseInt(serviceInterval || vehicle.serviceInterval, 10),
+        parseInt(oilInterval || vehicle.oilInterval || 2000, 10),
         oilReminderFrequency || vehicle.oilReminderFrequency || 'weekly',
         lastOilReminderDate !== undefined ? lastOilReminderDate : vehicle.lastOilReminderDate,
         stnkExpiryDate !== undefined ? stnkExpiryDate : vehicle.stnkExpiryDate,
@@ -273,8 +273,8 @@ app.put('/api/vehicles/:id/odo', async (req, res) => {
       return res.status(404).json({ error: 'Vehicle not found.' });
     }
 
-    const nextCurrent = currentOdometer !== undefined ? parseInt(currentOdometer) : vehicle.currentOdometer;
-    const nextLastService = lastServiceOdometer !== undefined ? parseInt(lastServiceOdometer) : vehicle.lastServiceOdometer;
+    const nextCurrent = currentOdometer !== undefined ? parseInt(currentOdometer, 10) : vehicle.currentOdometer;
+    const nextLastService = lastServiceOdometer !== undefined ? parseInt(lastServiceOdometer, 10) : vehicle.lastServiceOdometer;
 
     await dbQuery.run(
       'UPDATE vehicles SET currentOdometer = ?, lastServiceOdometer = ? WHERE id = ? AND userId = ?',
@@ -312,14 +312,14 @@ app.post('/api/logs', async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         req.user.userId,
-        parseInt(vehicleId),
+        parseInt(vehicleId, 10),
         vehicleName,
         date || new Date().toLocaleDateString(),
         parseFloat(distance),
-        parseInt(duration),
-        parseInt(startOdometer || 0),
-        parseInt(endOdometer || 0),
-        parseInt(safetyScore || 100),
+        parseInt(duration, 10),
+        parseInt(startOdometer || 0, 10),
+        parseInt(endOdometer || 0, 10),
+        parseInt(safetyScore || 100, 10),
         safetyAlerts || 'None',
         notes || ''
       ]
@@ -364,11 +364,11 @@ app.post('/api/maintenance', async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         req.user.userId,
-        parseInt(vehicleId),
+        parseInt(vehicleId, 10),
         vehicleName,
         serviceType,
         date || new Date().toISOString().split('T')[0],
-        parseInt(odometer),
+        parseInt(odometer, 10),
         parseFloat(cost || 0),
         notes || ''
       ]
